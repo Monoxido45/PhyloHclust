@@ -17,7 +17,6 @@ L_score <- function(dend,
   dend$edge.length[which(dend$edge.length %in% c(0))] <- 10^(-3)
   dend$edge.length[which(dend$edge.length < 0)] <- 10^(-3)
   names <- row.names(original_data)
-  row.names(original_data)  <- c(1:nrow(original_data))
   # paralellizing
   cores <- parallel::detectCores()
   cl <- parallel::makeCluster(ncores)
@@ -25,9 +24,10 @@ L_score <- function(dend,
                         "onehotencoder"))
   doParallel::registerDoParallel(cl)
   loss.matrix <- foreach::foreach(j = 1:p, .combine = cbind,
-                           .export = c("scaled_row_computing",
+                           .export = c("row_computing",
                                        "factorial.missing",
-                                       "onehotencoder")) %dopar% {
+                                       "onehotencoder"),
+                           .packages = c("magrittr")) %dopar% {
                              lines = row_computing(types,
                                                    dend,
                                                    original_data,
@@ -35,7 +35,7 @@ L_score <- function(dend,
                                                    seed,
                                                    j)
                              lines
-                           }
+                                       }
   parallel::stopCluster(cl)
   if(p == 1){
       loss.matrix <- as.matrix(loss.matrix)
@@ -65,6 +65,7 @@ CVL <- function(data,
   types <- sapply(data, class)
   bool <- (types == "integer" | types == "numeric")
   no_dists <- T
+  row.names(data) = 1:nrow(data)
 
   if(length(bool[bool != T]) == 0){
     if(length(dists) > 1) no_dists <- F
@@ -79,49 +80,69 @@ CVL <- function(data,
     methods <- cl.list[[hc.func]]
     m <- length(methods)
     if(no_dists == T){
-      results <- numeric(p)
-      for(j in 1:p){
-        test_data <- data %>%
-          dplyr::select(j) %>%
-          as.data.frame()
+      if(anyNA(methods) == F){
+        for(c in (1:m)){
+          results <- numeric(p)
+          for(j in 1:p){
+            test_data <- data %>%
+              dplyr::select(j) %>%
+              as.data.frame()
 
-        training_data <- data %>%
-          dplyr::select(-j) %>%
-          as.data.frame()
-
-        types_train <- training_data %>%
-          sapply(class)
-        new_bool <- (types_train == "integer" | types_train == "numeric")
-
-
-        # testing conditions
-        if(length(new_bool[new_bool != T]) == 0){
-            d <- stats::dist(scale(training_data), method = dists)
-        }else{
-            d <- kmed::distmix(training_data, method = mixed_dist)
-          }
-
-        clust <- get(hc.func)(d)
-        tree <- convert_to_phylo(clust)
-        results[j] <- tryCatch(L_score(tree,
-                                      test_data,
-                                      ncores = 1),
-                                  silent = T,
-                              error=function(msg){
-                                    return(NA)
-                                  })
+            training_data <- data %>%
+              dplyr::select(-j) %>%
+              as.data.frame()
+            if(length(bool[bool != T]) == 0){
+              d <- stats::dist(scale(training_data), method = dists)
+            }else{
+              d <- kmed::distmix(training_data, method = mixed_dist)
+            }
+            clust <- get(hc.func)(d, method = methods[c])
+            tree <- convert_to_phylo(clust)
+            results[j] <- L_score(tree, test_data, ncores = 1)
           }
           if(median == F){
-            all_results[[hc.func]] <- mean(results, na.rm = T)
+            all_results[[paste0(hc.func, ".", methods[c], ".", used.dists[h])]] <-
+              c(mean(results, na.rm = T),
+                used.dists[h])
           }else{
-            all_results[[hc.func]] <- median(results, na.rm = T)
+            all_results[[paste0(hc.func, ".", methods[c], ".", used.dists[h])]] <-
+              c(median(results, na.rm = T),
+                used.dists[h])
           }
+        }}else{
+          results <- numeric(p)
+          for(j in 1:p){
+            test_data <- data %>%
+              dplyr::select(j) %>%
+              as.data.frame()
 
+            training_data <- data %>%
+              dplyr::select(-j) %>%
+              as.data.frame()
+
+            if(length(bool[bool != T]) == 0){
+              d <- stats::dist(scale(training_data), method = dists)
+            }else{
+              d <- kmed::distmix(training_data, method = mixed_dist)
+            }
+
+            clust <- get(hc.func)(d)
+            tree <- convert_to_phylo(clust)
+            results[j] <- L_score(tree, test_data, ncores = 1)
+          }
+          if(median == F){
+            all_results[[paste0(hc.func, ".", used.dists[h])]] <-
+              c(mean(results, na.rm = T), used.dists[h])
+          }else{
+            all_results[[paste0(hc.func, ".", used.dists[h])]] <-
+              c(median(results, na.rm = T), used.dists[h])
+          }
+        }
     }
     else{
       dists.length <- length(used.dists)
       for(h in 1:dists.length){
-        if(is.na(methods) == F){
+        if(anyNA(methods) == F){
           for(c in (1:m)){
             results <- numeric(p)
             for(j in 1:p){
@@ -139,10 +160,7 @@ CVL <- function(data,
               }
               clust <- get(hc.func)(d, method = methods[c])
               tree <- convert_to_phylo(clust)
-              results[j] <- tryCatch(L_score(tree, test_data, ncores = 1),
-                                    silent = T, error=function(msg){
-                                      return(NA)
-                                    })
+              results[j] <- L_score(tree, test_data, ncores = 1)
             }
             if(median == F){
               all_results[[paste0(hc.func, ".", methods[c], ".", used.dists[h])]] <-
@@ -172,10 +190,7 @@ CVL <- function(data,
 
               clust <- get(hc.func)(d)
               tree <- convert_to_phylo(clust)
-              results[j] <- tryCatch(L_score(tree, test_data),
-                                    silent = T, error=function(msg){
-                                      return(NA)
-                                    })
+              results[j] <- L_score(tree, test_data, ncores = 1)
             }
             if(median == F){
               all_results[[paste0(hc.func, ".", used.dists[h])]] <-
@@ -208,7 +223,8 @@ PFIS <- function(data,
                 mixed_dist = "gower",
                 tol = 1e-20,
                 seed = 99,
-                ncores = 2){
+                ncores = 2,
+                plot = TRUE){
 
   list.names <- names(cl.list)
   p <- ncol(data)
@@ -216,6 +232,7 @@ PFIS <- function(data,
   all_results <- list()
   types <- sapply(data, class)
   bool <- (types == "integer" | types == "numeric")
+  row.names(data) <- 1:nrow(data)
   no_dists <- T
 
   if(length(bool[bool != T]) == 0){
@@ -239,7 +256,7 @@ PFIS <- function(data,
         d <- kmed::distmix(data, method = mixed_dist)
       }
 
-      if(is.na(methods) == F){
+      if(anyNA(methods) == F){
         for(c in (1:m)){
           clust <- get(hc.func)(d, method = methods[c])
           tree <- convert_to_phylo(clust)
@@ -269,7 +286,7 @@ PFIS <- function(data,
           d <- kmed::distmix(data, method = mixed_dist[h])
         }
 
-        if(is.na(methods) == F){
+        if(anyNA(methods) == F){
           for(c in (1:m)){
             clust = get(hc.func)(d, method = methods[c])
             tree = convert_to_phylo(clust)
@@ -296,14 +313,76 @@ PFIS <- function(data,
       }
     }
   }
-  if(no_dists == F){
+  if(no_dists == FALSE){
     all_cvs <- do.call(rbind, all_results)
     cvs_data.frame <- as.data.frame(all_cvs)
     cvs_data.frame[, 1:p] <- sapply(cvs_data.frame, as.numeric)
-    return(cvs_data.frame)
-  }else{
-    all_cvs <- do.call(rbind, all_results)
-    cvs_data.frame <- as.data.frame(all_cvs)
+    colnames(cvs_data.frame)[1:p] <- colnames(data)
+    if(plot){
+      p1 <- PFIS_plot(cvs_data.frame, no_dists = FALSE)
+      show(p1)
+      return(list(importance_data = cvs_data.frame,
+           plot = p1))
+    }
     return(cvs_data.frame)
   }
+  all_cvs <- do.call(rbind, all_results)
+  cvs_data.frame <- as.data.frame(all_cvs)
+  colnames(cvs_data.frame) <- colnames(data)
+  if(plot){
+      p1 <- PFIS_plot(cvs_data.frame, no_dists = TRUE)
+      show(p1)
+      return(list(importance_data = cvs_data.frame,
+                  plot = p1))
+    }
+  return(cvs_data.frame)
+}
+
+
+PFIS_plot <- function(importance_data, no_dists){
+  if(no_dists == TRUE){
+    p1 <- importance_data %>%
+      reshape2::melt() %>%
+      dplyr::mutate(variable =
+                      as.factor(
+                        colnames(importance_data))) %>%
+      dplyr::mutate(variable =
+                      forcats::fct_reorder(variable,
+                                           value,
+                                           .fun = 'median',
+                                           .desc = T)) %>%
+      ggplot2::ggplot(ggplot2::aes(x = variable, y = value, group = 1)) +
+      ggplot2::geom_line() +
+      ggplot2::geom_point() +
+      ggplot2::theme_minimal() +
+      ggplot2::labs(x = "Features",
+                    y = "PFIS")
+    return(p1)
+  }
+  p <- ncol(importance_data)
+  n <- nrow(importance_data)
+  dists <- importance_data %>%
+      dplyr::pull(p)
+  p1 <- importance_data %>%
+    select(-p) %>%
+    reshape2::melt() %>%
+    dplyr::mutate(dist = rep(as.factor(dists), p - 1),
+                    obs = rep(as.factor(1:n), p -1),
+                    variable = as.factor(variable)) %>%
+    dplyr::mutate(variable = forcats::fct_reorder(variable,
+                                    value,
+                                    .fun = 'median',
+                                    .desc = T)) %>%
+    ggplot2::ggplot(ggplot2::aes(
+        x = variable,
+        y  = value,
+        group = obs)) +
+      ggplot2::geom_line(ggplot2::aes(color = dist)) +
+      ggplot2::geom_point(ggplot2::aes(color = dist)) +
+      ggplot2::theme_minimal() +
+      ggplot2::labs(x = "Variables names",
+           y = "PFIS",
+           colour = "Distances")
+    return(p1)
+
 }
