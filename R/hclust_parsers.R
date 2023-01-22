@@ -2,13 +2,13 @@
 # and parsing dendrogram into phylo object
 to.dend = function(cl.obj){
   # converting generical clustering object into hclust object first
-  cluster.obj = cl.obj %>% as.hclust()
-  dend = cluster.obj %>% as.dendrogram(hang = -1, check = TRUE)
+  cluster.obj = cl.obj %>% stats::as.hclust()
+  dend = cluster.obj %>% stats::as.dendrogram(hang = -1, check = TRUE)
   return(dend)
 }
 
 # parsing dendrogram into parentetic format
-convert_to_par <- function(dend, first_it =  TRUE)
+convert_to_par <- function(dend, first_it = TRUE)
 {
   if (first_it == TRUE){
     dist = as.double(attr(dend, "height"))
@@ -99,8 +99,7 @@ convert_to_par <- function(dend, first_it =  TRUE)
 # finally, converting hclust object into phylo object
 #' Converting clustering object into phylo object
 #' @param cl.obj Clustering object
-#' @return phylo object
-#' @export
+#' @return Returns a phylo object
 convert_to_phylo = function(cl.obj){
   dend = to.dend(cl.obj)
   dend.str = convert_to_par(dend)

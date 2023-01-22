@@ -38,10 +38,10 @@ row_computing <- function(types,
                           tol,
                           seed,
                           col){
+
   n <- nrow(original_data)
   lines <- numeric(n)
   names <- row.names(original_data)
-  tree.order <- dend$tip.label
 
   if (types[col] == "integer" | types[col] == "numeric"){
     # scaling each data
