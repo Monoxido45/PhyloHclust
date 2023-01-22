@@ -1,0 +1,931 @@
+---
+title: "Some supervised learning tests for Dendrogram Score"
+output:
+  html_document:
+    df_print: paged
+  word_document: default
+---
+```{r global_options}
+knitr::opts_chunk$set(echo = T, out.width = '85%', fig.align = "center", warning = F)
+```
+Importing needed packages
+```{r}
+getwd()
+```
+
+```{r message = FALSE}
+library(ape)
+library(dendextend)
+library(cluster)
+library(tibble)
+library(magrittr)
+library(dplyr)
+library(phytools)
+library(mltools)
+library(data.table)
+library(factoextra)
+source("../modules/convert_to_parenthesis.R")
+source("../modules/cv_score.R")
+library(tictoc)
+library(mvMORPH)
+library(dplyr)
+library(tidyr)
+library(RColorBrewer)
+library(MASS)
+library(kableExtra)
+library(plyr)
+library(clValid)
+```
+First working with a simulated data set:
+```{r}
+set.seed(500)
+n = 170
+p = 2
+
+Y = sample(c(0, 1), n, replace = TRUE, prob = c(0.5, 0.5))
+mu_0 = c(0, 0)
+mu_1 = c(1, 2)
+S = cbind(c(2, 1), c(1, 3))
+
+
+X = matrix(nrow = n, ncol = p)
+X[Y == 0, ] = round(mvrnorm(sum(Y == 0), mu_0, S), 4)
+X[Y == 1, ] = round(mvrnorm(sum(Y == 1), mu_1, S), 4)
+
+sim.data = as.data.frame(cbind(X , Y))
+sim.data$Y = as.factor(Y)
+colnames(sim.data) = c("X1", "X2", "Y")
+row.names(sim.data) = c(1:nrow(sim.data))
+head(sim.data, 4)
+```
+We can make a comparison function between a supervised learning prediction score computed into hierarchical clustering with ward.D2 method with our score:
+```{r}
+tic("Time of the supervised comparison")
+comp = supervised_comparing(sim.data, clust = "hclust", clust_method = "ward.D2", test_index = 3)
+comp
+toc()
+```
+Testing the list input for supervised_comparing and cv_score algorithms:
+```{r}
+test.list = list(hclust = c("ward.D", "single","ward.D2", "average", "complete", "mcquitty", "median", "centroid"), agnes = c("weighted", "average", "ward"), diana = NA)
+names(test.list)
+test.list[[3]]
+```
+```{r}
+paste0(names(test.list)[1], test.list[[1]][1])
+```
+Running all supervised comparisons:
+```{r}
+tic("Running time for all_supervised_comparing")
+data.test = all_supervised_comparing(sim.data, clust = test.list, test_index = 3)
+data.test
+toc()
+```
+Graphing the comparisson:
+```{r}
+data.test %>%
+  mutate(names = rownames(data.test)) %>% 
+  ggplot(aes(x = V1, y = V3)) +
+  geom_point(color = "red") +
+  labs(x = "Proportion of hits",
+       y = "Scores") +
+  theme_minimal()
+```
+\
+```{r}
+sim.fom = FOM(sim.data[, -3], nlvls = 2, test.list)
+```
+```{r}
+sim.fom
+```
+FOM versus score:
+```{r}
+data.test$FOM = sim.fom$V1
+data.test %>%
+  mutate(names = rownames(data.test)) %>% 
+  ggplot(aes(x = FOM, y = V3)) +
+  geom_point(color = "red") +
+  labs(x = "FOM score",
+       y = "Scores") +
+  theme_minimal()
+```
+
+```{r}
+dists = c("euclidean", "manhattan", "canberra")
+tic("Running time for all_supervised_comparing")
+data.test = all_supervised_comparing(sim.data, clust = test.list, test_index = 3, dist = dists)
+data.test
+toc()
+```
+Computing FOM:
+```{r}
+sim.fom = FOM(sim.data[, -3], nlvls = 2, test.list, dists = dists)
+```
+```{r}
+sim.fom = sim.fom %>%
+  dplyr::arrange(V2)
+
+# arranging data.test
+data.test = data.test %>%
+  dplyr::arrange(V4)
+sim.fom$V1 = as.numeric(sim.fom$V1)
+sim.fom
+```
+Graphing the comparison acording to distance:
+```{r echo=TRUE}
+data.test = data.test %>%
+  mutate(V1 = as.numeric(V1),
+         V2 = as.numeric(V2),
+         V3 = as.numeric(V3),
+         V4 = as.factor(V4))
+data.test %>%
+  ggplot(aes(x = V1, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Proportion of hits",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of proportion of hits versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+```
+```{r}
+data.test %>%
+  ggplot(aes(x = V2, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "F1 score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of F1 versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+```
+```{r}
+data.test$FOM = sim.fom$V1
+data.test %>%
+  ggplot(aes(x = FOM, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "FOM score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of FOM versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+```
+
+```{r}
+cor(data.test$FOM, data.test$V3, method = "spearman")
+```
+Increasing sample size:
+```{r}
+set.seed(500)
+n = 550
+p = 2
+
+Y = sample(c(0, 1), n, replace = TRUE, prob = c(0.5, 0.5))
+mu_0 = c(0, 0)
+mu_1 = c(1, 2)
+S = cbind(c(2, 1), c(1, 3))
+
+
+X = matrix(nrow = n, ncol = p)
+X[Y == 0, ] = round(mvrnorm(sum(Y == 0), mu_0, S), 4)
+X[Y == 1, ] = round(mvrnorm(sum(Y == 1), mu_1, S), 4)
+
+sim.data = as.data.frame(cbind(X , Y))
+sim.data$Y = as.factor(Y)
+colnames(sim.data) = c("X1", "X2", "Y")
+row.names(sim.data) = c(1:nrow(sim.data))
+head(sim.data, 4)
+```
+```{r}
+dists = c("euclidean", "manhattan", "canberra")
+tic("Running time for all_supervised_comparing")
+data.test2 = all_supervised_comparing(sim.data, clust = test.list, test_index = 3, dist = dists)
+data.test2
+toc()
+```
+```{r}
+sim.fom2 = FOM(sim.data[, -3], nlvls = 2, test.list, dists = dists)
+sim.fom2 = sim.fom2 %>%
+  dplyr::arrange(V2)
+
+# arranging data.test
+data.test2 = data.test %>%
+  dplyr::arrange(V4)
+sim.fom2$V1 = as.numeric(sim.fom2$V1)
+sim.fom2
+```
+```{r}
+data.test2 = data.test2 %>%
+  mutate(V1 = as.numeric(V1),
+         V2 = as.numeric(V2),
+         V3 = as.numeric(V3),
+         V4 = as.factor(V4))
+data.test2 %>%
+  ggplot(aes(x = V1, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Proportion of hits",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of proportion of hits versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+```
+```{r}
+data.test2 %>%
+  ggplot(aes(x = V2, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "F1 score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of F1 versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+```
+```{r}
+data.test2$FOM = sim.fom2$V1
+data.test2 %>%
+  ggplot(aes(x = FOM, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "FOM score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of FOM versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+```
+```{r}
+cor(data.test2$FOM, data.test2$V3, method = "spearman")
+```
+Repeating all the proccess for more separated data:
+```{r}
+set.seed(150)
+n = 170
+p = 2
+
+Y = sample(c(0, 1), n, replace = TRUE, prob = c(0.5, 0.5))
+mu_0 = c(0, 0)
+mu_1 = c(6, 8)
+S = diag(nrow = 2, ncol = 2)
+
+X = matrix(nrow = n, ncol = p)
+X[Y == 0, ] = round(mvrnorm(sum(Y == 0), mu_0, S), 4)
+X[Y == 1, ] = round(mvrnorm(sum(Y == 1), mu_1, S), 4)
+
+sim.data = as.data.frame(cbind(X , Y))
+sim.data$Y = as.factor(Y)
+colnames(sim.data) = c("X1", "X2", "Y")
+row.names(sim.data) = c(1:nrow(sim.data))
+head(sim.data, 4)
+```
+```{r}
+dists = c("euclidean", "manhattan", "canberra")
+tic("Running time for all_supervised_comparing")
+data.test = all_supervised_comparing(sim.data, clust = test.list, test_index = 3, dist = dists)
+data.test
+toc()
+```
+Computing FOM:
+```{r}
+sim.fom = FOM(sim.data[, -3], nlvls = 2, test.list, dists = dists)
+```
+```{r}
+sim.fom = sim.fom %>%
+  dplyr::arrange(V2)
+
+# arranging data.test
+data.test = data.test %>%
+  dplyr::arrange(V4)
+sim.fom$V1 = as.numeric(sim.fom$V1)
+sim.fom
+```
+Graphing the comparison acording to distance:
+```{r echo=TRUE}
+data.test = data.test %>%
+  mutate(V1 = as.numeric(V1),
+         V2 = as.numeric(V2),
+         V3 = as.numeric(V3),
+         V4 = as.factor(V4))
+data.test %>%
+  ggplot(aes(x = V1, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Proportion of hits",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of proportion of hits versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+```
+```{r}
+data.test$FOM = sim.fom$V1
+data.test %>%
+  ggplot(aes(x = FOM, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "FOM score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of FOM versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+```
+
+```{r}
+cor(data.test$FOM, data.test$V3, method = "spearman")
+```
+Increasing sample size:
+```{r}
+set.seed(500)
+n = 550
+p = 2
+
+Y = sample(c(0, 1), n, replace = TRUE, prob = c(0.5, 0.5))
+mu_0 = c(0, 0)
+mu_1 = c(6, 8)
+S = diag(nrow = 2, ncol = 2)
+
+
+X = matrix(nrow = n, ncol = p)
+X[Y == 0, ] = round(mvrnorm(sum(Y == 0), mu_0, S), 4)
+X[Y == 1, ] = round(mvrnorm(sum(Y == 1), mu_1, S), 4)
+
+sim.data = as.data.frame(cbind(X , Y))
+sim.data$Y = as.factor(Y)
+colnames(sim.data) = c("X1", "X2", "Y")
+row.names(sim.data) = c(1:nrow(sim.data))
+head(sim.data, 4)
+```
+```{r}
+dists = c("euclidean", "manhattan", "canberra")
+tic("Running time for all_supervised_comparing")
+data.test2 = all_supervised_comparing(sim.data, clust = test.list, test_index = 3, dist = dists)
+data.test2
+toc()
+```
+```{r}
+sim.fom2 = FOM(sim.data[, -3], nlvls = 2, test.list, dists = dists)
+sim.fom2 = sim.fom2 %>%
+  dplyr::arrange(V2)
+
+# arranging data.test
+data.test2 = data.test2 %>%
+  dplyr::arrange(V4)
+sim.fom2$V1 = as.numeric(sim.fom2$V1)
+sim.fom2
+```
+```{r}
+data.test2 %>%
+  ggplot(aes(x = V1, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Proportion of hits",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of proportion of hits versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+```
+```{r}
+data.test2$FOM = sim.fom2$V1
+data.test2 %>%
+  ggplot(aes(x = FOM, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "FOM score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of FOM versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+```
+```{r}
+cor(data.test2$FOM, data.test2$V3, method = "spearman")
+```
+
+Testing iris dataset:
+```{r}
+flowers = iris
+tic("Running time for all_supervised_comparing in iris dataset")
+iris.test = all_supervised_comparing(flowers, clust = test.list, test_index = 5, dist = dists)
+iris.test
+toc()
+```
+```{r warning = F}
+iris.fom = FOM(flowers[, -5], nlvls = 3, test.list, dists = dists)
+```
+```{r}
+iris.fom = iris.fom %>%
+  dplyr::arrange(V2)
+
+# arranging data.test
+iris.test = iris.test %>%
+  dplyr::arrange(V4)
+iris.fom$V1 = as.numeric(iris.fom$V1)
+iris.fom
+```
+And then, graphing it:
+**Proportion of hits versus Score values**
+```{r echo = F}
+iris.test = iris.test %>%
+  mutate(V1 = as.numeric(V1),
+         V2 = as.numeric(V2),
+         V3 = as.numeric(V3),
+         V4 = as.factor(V4))
+
+iris.test %>%
+  ggplot(aes(x = V1, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Proportion of hits",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of proportion of hits versus Score values 
+       according to different distances") +
+    theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5))+
+  scale_colour_brewer(palette = "Set1")
+```
+\
+**F1 versus Score values**
+```{r}
+iris.test %>%
+  ggplot(aes(x = V2, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "F1 score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of F1 versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+```
+\
+```{r}
+iris.test$FOM = iris.fom$V1
+iris.test %>%
+  ggplot(aes(x = FOM, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "FOM score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of FOM versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+
+cor(iris.test$FOM, iris.test$V3, method = "kendall")
+```
+Testing supervisioned comparisson for cross validation score
+```{r}
+set.seed(500)
+n = 170
+p = 2
+
+Y = sample(c(0, 1), n, replace = TRUE, prob = c(0.5, 0.5))
+mu_0 = c(0, 0)
+mu_1 = c(1, 2)
+S = cbind(c(2, 1), c(1, 3))
+
+
+X = matrix(nrow = n, ncol = p)
+X[Y == 0, ] = round(mvrnorm(sum(Y == 0), mu_0, S), 4)
+X[Y == 1, ] = round(mvrnorm(sum(Y == 1), mu_1, S), 4)
+
+sim.data = as.data.frame(cbind(X , Y))
+sim.data$Y = as.factor(Y)
+colnames(sim.data) = c("X1", "X2", "Y")
+row.names(sim.data) = c(1:nrow(sim.data))
+head(sim.data, 4)
+```
+```{r}
+cl.list = list(hclust = c("single","ward.D2", "mcquitty", "average", "centroid", "complete",
+                          "ward.D"), 
+               agnes = c("weighted", "average"), diana = NA)
+dists = c("euclidean", "manhattan", "canberra")
+tic("Running time for all_supervised_comparing")
+cv.data.test = supervised_comparing_L_cross_val(sim.data, cl.list, test_index = 3, 
+                                             dists = dists)
+head(cv.data.test, 10)
+toc()
+```
+```{r}
+cv.data.test %>%
+  ggplot(aes(x = V1, y = hits, colour = V2)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Scores",
+       y = "Proportion of hits",
+       colour = "Distances",
+       title = "Scatterplot of proportion of hits versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5))+
+  scale_colour_brewer(palette = "Set1") +
+  coord_flip()
+```
+```{r}
+cv.data.test %>%
+  ggplot(aes(x = V1, y = F1, colour = V2)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Scores",
+       y = "F1",
+       colour = "Distances",
+       title = "Scatterplot of F1 versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5))+
+  scale_colour_brewer(palette = "Set1") +
+  coord_flip()
+```
+```{r}
+cv.data.test = cv.data.test %>%
+  dplyr::arrange(V2)
+
+cv.fom = FOM(sim.data[, -3], nlvls = 2, cl.list, dists = dists)
+cv.fom$V1 = as.numeric(cv.fom$V1)
+cv.fom = cv.fom %>%
+  dplyr::arrange(V2)
+cv.data.test$FOM = cv.fom$V1
+```
+
+```{r}
+cv.data.test %>%
+  ggplot(aes(x = V1, y = FOM, colour = V2)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Scores",
+       y = "FOM score",
+       colour = "Distances",
+       title = "Scatterplot of FOM versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5))+
+  scale_colour_brewer(palette = "Set1") +
+  coord_flip()
+```
+\
+To facilitate further investigations on several datasets, we can draft a function that make pairwise graphs of FOM and our score versus the other variables:
+```{r}
+# function for default score:
+display.superv_comp = function(data, clust.list, test_index, dist = NA){
+  k = nlevels(data[, test_index])
+  data.test = all_supervised_comparing(data, clust = clust.list, test_index = test_index, dist = dist)
+  fom.test = FOM(data[, -(test_index)], nlvls = k, clust.list, dist)
+  # arranging datas
+  fom.test = fom.test %>%
+  dplyr::arrange(V2)
+  data.test = data.test %>%
+  dplyr::arrange(V4)
+  fom.test$V1 = as.numeric(fom.test$V1)
+  data.test$FOM = fom.test$V1
+  
+  # graphing and displaying correlations
+  g1 = data.test %>%
+  ggplot(aes(x = V1, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Proportion of hits",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of proportion of hits versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+  
+  g2 = data.test %>%
+  ggplot(aes(x = V2, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "F1 score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of F1 versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+  
+  g3 = data.test %>%
+  ggplot(aes(x = FOM, y = V3, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "FOM score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of FOM versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+  
+  g4 = data.test %>%
+  ggplot(aes(x = V1, y = FOM, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Proportion of hits",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of proportion of hits versus FOM Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+  
+  g5 = data.test %>%
+  ggplot(aes(x = V2, y = FOM, colour = V4)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "F1 score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of F1 versus FOM Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+  
+  show(g1)
+  show(g2)
+  show(g3)
+  cat("Correlations between score and other variables: \n")
+  cat("Score versus proportion of hits: ", cor(data.test$V3, data.test$V1, method = "spearman"), "\n")
+  cat("Score versus F1: ", cor(data.test$V3, data.test$V2, method = "spearman"), "\n")
+  cat("Score versus FOM: ", cor(data.test$V3, data.test$FOM, method = "spearman"), "\n")
+  
+  show(g4)
+  show(g5)
+  cat("Correlations between FOM and other variables: \n")
+  cat("FOM versus F1: ", cor(data.test$FOM, data.test$V2, method = "spearman"), "\n")
+  cat("FOM versus proportion of hits: ", cor(data.test$FOM, data.test$V1, method = "spearman"), "\n")
+  return(data.test)
+}
+
+CV_display.superv_comp = function(data, clust.list, test_index, dist = NA){
+  k = nlevels(data[, test_index])
+  data.test = supervised_comparing_L_cross_val(data, clust.list, test_index = test_index, dists = dist)
+  fom.test = FOM(data[, -(test_index)], nlvls = k, clust.list, dist)
+  # arranging datas
+  
+  data.test = data.test %>%
+  dplyr::arrange(V2)
+  
+  fom.test$V1 = as.numeric(fom.test$V1)
+  fom.test = fom.test %>%
+  dplyr::arrange(V2)
+  data.test$FOM = fom.test$V1
+  
+  # graphing and displaying correlations
+  g1 = data.test %>%
+  ggplot(aes(x = hits, y = V1, colour = V2)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Proportion of hits",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of proportion of hits versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+  
+  g2 = data.test %>%
+  ggplot(aes(x = F1, y = V1, colour = V2)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "F1 score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of F1 versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+  
+  g3 = data.test %>%
+  ggplot(aes(x = FOM, y = V1, colour = V2)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "FOM score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of FOM versus Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+  
+  g4 = data.test %>%
+  ggplot(aes(x = hits, y = FOM, colour = V2)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "Proportion of hits",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of proportion of hits versus FOM Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+  
+  g5 = data.test %>%
+  ggplot(aes(x = F1, y = FOM, colour = V2)) +
+  geom_point() +
+  theme_minimal() +
+  labs(x = "F1 score",
+       y = "Scores",
+       colour = "Distances",
+       title = "Scatterplot of F1 versus FOM Score values 
+       according to different distances") +
+  theme(text = element_text(size = 11, 
+                            family ="serif"),
+        plot.title = element_text(hjust = 0.5)) +
+  scale_colour_brewer(palette = "Set1")
+  
+  show(g1)
+  show(g2)
+  show(g3)
+  cat("Correlations between cross validated score and other variables: \n")
+  cat("Score versus proportion of hits: ", cor(data.test$V1, data.test$hits), "\n")
+  cat("Score versus F1: ", cor(data.test$V1, data.test$F1), "\n")
+  cat("Score versus FOM: ", cor(data.test$V1, data.test$FOM), "\n")
+  
+  show(g4)
+  show(g5)
+  cat("Correlations between FOM and other variables: \n")
+  cat("FOM versus F1: ", cor(data.test$FOM, data.test$hits), "\n")
+  cat("FOM versus proportion of hits: ", cor(data.test$FOM, data.test$F1), "\n")
+  return(data.test)
+}
+
+data.generator = function(n, mu_0, mu_1, p = 2, S = NULL, seed = 500){
+  set.seed(seed)
+  Y = sample(c(0, 1), n, replace = TRUE, prob = c(0.5, 0.5))
+  if(is.null(S) == T) S = diag(nrow = p, ncol = p)
+  X = matrix(nrow = n, ncol = p)
+  X[Y == 0, ] = round(mvrnorm(sum(Y == 0), mu_0, S), 4)
+  X[Y == 1, ] = round(mvrnorm(sum(Y == 1), mu_1, S), 4)
+
+  sim.data = as.data.frame(cbind(X , Y))
+  sim.data$Y = as.factor(Y)
+  if(p == 2){
+  colnames(sim.data) = c("X1", "X2", "Y")}
+  row.names(sim.data) = c(1:nrow(sim.data))
+  return(sim.data)
+}
+```
+Repeating simulation again:
+```{r}
+n = 170
+p = 2
+mu_0 = c(0, 0)
+mu_1 = c(1, 2)
+S = cbind(c(2, 1), c(1, 3))
+sim.data = data.generator(n, mu_0, mu_1, S = S)
+head(sim.data, 4)
+```
+```{r}
+display.superv_comp(sim.data, test.list, test_index = 3, dist = dists)
+```
+For separated data:
+```{r}
+n = 170
+p = 2
+mu_0 = c(0, 0)
+mu_1 = c(6, 8)
+sim.data = data.generator(n, mu_0, mu_1, seed = 150)
+head(sim.data, 4)
+```
+```{r}
+display.superv_comp(sim.data, test.list, test_index = 3, dist = dists)
+```
+```{r}
+n = 500
+p = 2
+mu_0 = c(0, 0)
+mu_1 = c(2, 2)
+sim.data = data.generator(n, mu_0, mu_1, seed = 150)
+head(sim.data, 4)
+```
+```{r}
+display.superv_comp(sim.data, test.list, test_index = 3, dist = dists)
+```
+```{r}
+flowers = iris
+display.superv_comp(flowers, test.list, test_index = 5, dist = dists)
+```
+```{r}
+n = 170
+p = 2
+mu_0 = c(0, 0)
+mu_1 = c(1, 2)
+S = cbind(c(2, 1), c(1, 3))
+sim.data = data.generator(n, mu_0, mu_1, S = S)
+head(sim.data, 4)
+```
+```{r}
+tic("Running time for cv_superv_comp")
+CV_display.superv_comp(sim.data, test.list, test_index = 3, dist = dists)
+toc()
+```
+Importing and testing real datasets: \
+**Wheat seeds dataset**
+```{r}
+# wheat seeds dataset
+wheat_data = read.delim("C:/Users/lucru/Estatística_UFSCar/cv_cluster/data/seeds_dataset.txt")
+wheat_data$X1 = as.factor(wheat_data$X1)
+head(wheat_data)
+```
+```{r}
+tic("Running time for supervisioned comparisson in wheat seeds dataset")
+display.superv_comp(wheat_data, test.list, test_index = 8, dist = dists)
+toc()
+```
+\
+**Prima indians diabetes dataset**
+```{r}
+# prima indians dataset
+library(data.table)
+prima_data <- as.data.frame(fread('https://raw.githubusercontent.com/jbrownlee/Datasets/master/pima-indians-diabetes.csv'))
+prima_data$V9 = as.factor(prima_data$V9)
+head(prima_data)
+```
+```{r}
+tic("Running time for supervisioned comparisson in prima indians diabetes dataset")
+display.superv_comp(prima_data, test.list, test_index = 9, dist = dists)
+toc()
+```
+\
+**Ionosphere dataset**
+```{r}
+ionosphere_data = as.data.frame(read.table("https://archive.ics.uci.edu/ml/machine-learning-databases/ionosphere/ionosphere.data", sep = ","))
+ionosphere_data$V35 = as.factor(ionosphere_data$V35)
+head(ionosphere_data)
+```
+```{r}
+tic("Running time for supervisioned comparisson in ionosphere dataset")
+display.superv_comp(ionosphere_data, test.list, test_index = 35, dist = dists)
+toc()
+```
+
+
+
+
+

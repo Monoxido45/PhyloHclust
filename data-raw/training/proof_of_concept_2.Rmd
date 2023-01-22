@@ -1,0 +1,362 @@
+---
+title: "Proof of concept 2"
+author: "Luben Miguel"
+date: "20/01/2021"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+Importing needed packages
+```{r message = F}
+library(ape)
+library(dendextend)
+library(cluster)
+library(tibble)
+library(magrittr)
+library(dplyr)
+library(phytools)
+library(mltools)
+library(data.table)
+library(factoextra)
+source("C:/Users/lucru/Estatística_UFSCar/cv_cluster/modules/convert_to_parenthesis.R")
+source("C:/Users/lucru/Estatística_UFSCar/cv_cluster/modules/cv_score.R")
+library(tictoc)
+library(mvMORPH)
+library(tidyr)
+library(MASS)
+library(ggplot2)
+library(ggthemes)
+library(ggpubr)
+library(gridBase)
+library(grid)
+library(clValid)
+```
+Analysing the mcquitty and complete method situations viewed in proof_of_consent: \
+**Simulating data**
+```{r}
+# simulating data
+set.seed(500)
+n = 100
+p = 2
+
+Y = sample(c(0, 1), n, replace = TRUE, prob = c(0.5, 0.5))
+mu_0 = c(0, 0)
+mu_1 = c(2, 2)
+S = diag(nrow = 2, ncol = 2)
+
+
+X = matrix(nrow = n, ncol = p)
+X[Y == 0, ] = round(mvrnorm(sum(Y == 0), mu_0, S), 4)
+X[Y == 1, ] = round(mvrnorm(sum(Y == 1), mu_1, S), 4)
+
+sim.data = as.data.frame(cbind(X , Y))
+sim.data$Y = as.factor(Y)
+colnames(sim.data) = c("X1", "X2", "Y")
+row.names(sim.data) = c(1:nrow(sim.data))
+head(sim.data, 4)
+```
+**Simulating wrong data**
+```{r}
+X_3 = data.frame(X3 = rexp(n, 1))
+head(X_3)
+```
+**Scatterplot of original data and ground truth labels**
+```{r}
+# ground truth labels
+lvls = levels(sim.data$Y)
+tam = length(lvls)
+relab_y = mapvalues(sim.data$Y, from = lvls, to = 1:tam)
+relab_y
+new_lvls = levels(relab_y)
+new_lvls
+
+# scatterplot
+sim.data %>%
+          ggplot(aes(x = X1, y = X2, colour = Y)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+```
+\
+```{r}
+test.function = function(types, dend, original_data, tol,seed, col){
+  n = nrow(original_data)
+  lines = numeric(n)
+  names = row.names(original_data)
+  j = col
+  tree.order = dend$tip.label
+  cname = colnames(original_data)[j]
+  preds = numeric(n)
+  if (types[j] == "integer" | types[j] == "numeric"){
+    current_data = as.matrix(original_data[, j])
+    # not scaling
+    colnames(current_data) = cname
+    rownames(current_data) = names
+    current_data = as.matrix(current_data[dend$tip.label, ])
+    fit = mvBM(dend, current_data, model = "BMM", echo = T, method = "inverse")
+    for (i in (1:n)){
+      saved_value = current_data[i]
+      miss_data = current_data
+      names(miss_data) = names
+      miss_data[i, 1] = NA
+      imp = estim(dend, miss_data, fit)
+      y.pred = imp$estimates[i, 1]
+      print(y.pred)
+      print(saved_value)
+      preds[i] = y.pred
+      mse = ((y.pred - saved_value)^2)
+      lines[i] =  mse
+    }
+  }else{
+    current_data = original_data[, j]
+    if (types[j] == "logical") current_data = as.factor(current_data)
+    set.seed(seed)
+    for (i in (1:n)){
+      saved_value = numeric(nlevels(current_data))
+      saved_value[as.numeric(current_data)[i]] = 1
+      miss_data = current_data
+      A = nlevels(miss_data)
+      names(miss_data) = names
+      miss_data[i] = NA
+      pi = factorial.missing(dend, miss_data, i)
+      mse = (sum((saved_value - pi)^2))
+      lines[i] = mse/A
+    }
+  }
+  print(sum(lines/(n*2)))
+  return(preds)
+}
+
+test.total = function(dend, original_data){
+  types = sapply(original_data, class)
+  p = length(original_data[1, ])
+  n = length(original_data[, 1])
+  total = p*n
+  score.matrix = matrix(0, nrow = n, ncol = p)
+  dend$edge.length[which(dend$edge.length %in% c(0))] = 10^(-3)
+  names = row.names(original_data)
+  row.names(original_data)  = c(1:nrow(original_data))
+  results = list()
+  for(k in 1:p){
+    results[[k]] = test.function(types, dend, original_data, tol, seed, k)
+  }
+  return(results)
+}
+```
+
+**Mcquitty situation:**
+```{r}
+mcquitty.hc = hclust(dist(scale(sim.data[, -3])), method = "mcquitty")
+mcquitty.dend = convert_to_phylo(mcquitty.hc)
+
+# plotting score for mcquitty distance
+score.mcquitty = L_score(mcquitty.dend, sim.data[, -3])
+score.mcquitty
+
+cons.hc = hclust(dist(scale(X_3)), method = "mcquitty")
+cons.dend = convert_to_phylo(cons.hc)
+score.cons = L_score(cons.dend, sim.data[, -3])
+score.cons
+```
+```{r}
+results = test.total(mcquitty.dend, sim.data[, -3])
+```
+```{r}
+fviz_dend(mcquitty.hc, k = 2)
+factors = factor(cutree(mcquitty.hc, k = 2))
+temp_data = sim.data[, -3]
+temp_data$labels = factors
+temp_data %>%
+ggplot(aes(x = X1, y = X2, colour = labels)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+
+# predicted labels
+factors
+```
+\
+```{r}
+temp_data = as.data.frame(sim.data$X1)
+temp_data$X1_pred = results[[1]]
+colnames(temp_data) = c("X1", "Predictions")
+temp_data %>%
+ggplot(aes(x = X1, y = Predictions)) +
+          geom_point(color = "blue") +
+          labs(x = "X1",
+                y = "Predictions") +
+          theme_minimal()
+```
+**Complete situation:**
+```{r}
+complete.hc = hclust(dist(scale(sim.data[, -3])), method = "complete")
+complete.dend = convert_to_phylo(complete.hc)
+
+# plotting score for complete distance
+score.complete = L_score(complete.dend, sim.data[, -3])
+score.complete
+```
+```{r}
+fviz_dend(complete.hc, k = 2)
+factors = factor(cutree(complete.hc, k = 2))
+temp_data = sim.data[, -3]
+temp_data$labels = factors
+temp_data %>%
+ggplot(aes(x = X1, y = X2, colour = labels)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+
+# predicted labels
+factors
+```
+\
+```{r}
+set.seed(500)
+n = 100
+p = 2
+
+Y = sample(c(0, 1), n, replace = TRUE, prob = c(0.5, 0.5))
+mu_0 = c(0, 0)
+mu_1 = c(8, 8)
+S = diag(nrow = 2, ncol = 2)
+
+
+X = matrix(nrow = n, ncol = p)
+X[Y == 0, ] = round(mvrnorm(sum(Y == 0), mu_0, S), 4)
+X[Y == 1, ] = round(mvrnorm(sum(Y == 1), mu_1, S), 4)
+
+sim.data = as.data.frame(cbind(X , Y))
+sim.data$Y = as.factor(Y)
+colnames(sim.data) = c("X1", "X2", "Y")
+row.names(sim.data) = c(1:nrow(sim.data))
+head(sim.data, 4)
+
+# wrong data
+X_3 = data.frame(X3 = rexp(n, 1))
+head(X_3)
+```
+```{r}
+ward.hc = hclust(dist(scale(sim.data[, -3])), method = "ward.D2")
+ward.dend = convert_to_phylo(ward.hc)
+
+# plotting score for ward distance
+score.ward = L_score(ward.dend, sim.data[, -3])
+score.ward
+```
+```{r}
+results = test.total(ward.dend, sim.data[, -3])
+```
+```{r}
+temp_data = as.data.frame(sim.data$X1)
+rownames(temp_data) = c(1:nrow(sim.data))
+temp_data = as.data.frame(temp_data[as.numeric(ward.dend$tip.label), ])
+temp_data$X1_pred = results[[1]]
+colnames(temp_data) = c("X1", "Predictions")
+p1 = temp_data %>%
+ggplot(aes(x = X1, y = Predictions)) +
+          geom_point(color = "blue") +
+          labs(x = "X1",
+                y = "Predictions") +
+          theme_minimal()
+p1
+```
+
+```{r}
+hist(temp_data$Predictions)
+```
+```{r}
+hist(temp_data$X1)
+```
+```{r}
+fviz_dend(ward.hc, k = 2)
+factors = factor(cutree(ward.hc, k = 2))
+temp_data = sim.data[, -3]
+temp_data$labels = factors
+temp_data %>%
+ggplot(aes(x = X1, y = X2, colour = labels)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+
+# predicted labels
+factors
+```
+```{r}
+temp_data = as.data.frame(sim.data$X2)
+rownames(temp_data) = c(1:nrow(sim.data))
+temp_data = as.data.frame(temp_data[as.numeric(ward.dend$tip.label), ])
+temp_data$X2_pred = results[[2]]
+colnames(temp_data) = c("X2", "Predictions")
+temp_data %>%
+ggplot(aes(x = X2, y = Predictions)) +
+          geom_point(color = "blue") +
+          labs(x = "X2",
+                y = "Predictions") +
+          theme_minimal()
+```
+```{r}
+hist(temp_data$Predictions)
+```
+```{r}
+hist(temp_data$X2)
+```
+```{r}
+diana.hc = diana(dist(scale(sim.data[, -3])))
+diana.dend = convert_to_phylo(diana.hc)
+
+# plotting score for ward distance
+score.diana = L_score(diana.dend, sim.data[, -3])
+score.diana
+```
+```{r}
+results = test.total(diana.dend, sim.data[, -3])
+```
+```{r}
+fviz_dend(diana.hc, k = 2)
+factors = factor(cutree(diana.hc, k = 2))
+temp_data = sim.data[, -3]
+temp_data$labels = factors
+temp_data %>%
+ggplot(aes(x = X1, y = X2, colour = labels)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+
+# predicted labels
+factors
+```
+```{r}
+temp_data = as.data.frame(sim.data$X2)
+temp_data$X2_pred = results[[1]]
+colnames(temp_data) = c("X2", "Predictions")
+temp_data %>%
+ggplot(aes(x = X2, y = Predictions)) +
+          geom_point(color = "blue") +
+          labs(x = "X2",
+                y = "Predictions") +
+          theme_minimal()
+```
+```{r}
+hist(temp_data$Predictions)
+```
+```{r}
+hist(temp_data$X2)
+```
+

@@ -1,0 +1,625 @@
+---
+title: "Proof of concept"
+output:
+  html_document:
+    df_print: paged
+---
+Importing needed packages
+```{r message = F}
+library(ape)
+library(dendextend)
+library(cluster)
+library(tibble)
+library(magrittr)
+library(dplyr)
+library(phytools)
+library(mltools)
+library(data.table)
+library(factoextra)
+source("C:/Users/lucru/Estatística_UFSCar/cv_cluster/modules/convert_to_parenthesis.R")
+source("C:/Users/lucru/Estatística_UFSCar/cv_cluster/modules/cv_score.R")
+library(tictoc)
+library(mvMORPH)
+library(tidyr)
+library(MASS)
+library(ggplot2)
+library(ggthemes)
+library(ggpubr)
+library(gridBase)
+library(grid)
+library(clValid)
+```
+Here we have the interest of comparing the scatterplot, dendrogram and score of each hierarchical clustering method in order to do a proof of consent regarding our score, i.e., verify that our score makes sense in hierarchical clustering context. For that, me simulate the data with $n = 100$ sample points:
+```{r}
+set.seed(500)
+n = 100
+p = 2
+
+Y = sample(c(0, 1), n, replace = TRUE, prob = c(0.5, 0.5))
+mu_0 = c(0, 0)
+mu_1 = c(2, 2)
+S = diag(nrow = 2, ncol = 2)
+
+
+X = matrix(nrow = n, ncol = p)
+X[Y == 0, ] = round(mvrnorm(sum(Y == 0), mu_0, S), 4)
+X[Y == 1, ] = round(mvrnorm(sum(Y == 1), mu_1, S), 4)
+
+sim.data = as.data.frame(cbind(X , Y))
+sim.data$Y = as.factor(Y)
+colnames(sim.data) = c("X1", "X2", "Y")
+row.names(sim.data) = c(1:nrow(sim.data))
+head(sim.data, 4)
+```
+Simulating the "wrong" data:
+```{r}
+X_3 = data.frame(X3 = rexp(n, 1))
+head(X_3)
+```
+Scatterplot with "ground truth":
+```{r}
+sim.data %>%
+          ggplot(aes(x = X1, y = X2, colour = Y)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+```
+\
+Making the ploting function:
+```{r}
+plot_all_scores = function(original.data, cons.data, cl.list, dists = NA, nlvls = 2){
+  list.names = names(cl.list)
+  l = length(list.names)
+  for(k in 1:l){
+    hc.func = list.names[k]
+    methods = cl.list[[hc.func]]
+    m = length(methods)
+    if(is.na(dists)){
+      if(m > 0){
+      for(c in 1:m){
+        cons.hc = get(hc.func)(dist(scale(cons.data)), method = methods[c])
+        cons.dend = convert_to_phylo(cons.hc)
+        score.cons =  L_score(cons.dend, original.data[, -3])
+        original.hc = get(hc.func)(dist(scale(original.data[, -3])), method = methods[c])
+        original.dend = convert_to_phylo(original.hc)
+        score.original = L_score(original.dend, original.data[, -3])
+        p1.original = fviz_dend(original.hc, k = nlvls)
+        factors = factor(cutree(original.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        p2.original = temp_data %>%
+          ggplot(aes(x = X1, y = X2, colour = labels)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+        p1.cons = fviz_dend(cons.hc, k = nlvls)
+        factors = factor(cutree(cons.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        p2.cons = temp_data %>%
+          ggplot(aes(x = X1, y = X2, colour = labels)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+        t_grob1 = text_grob(paste0(hc.func,".", methods[c],
+        " original data score: ", round(score.original, 4)), size = 12)
+        t_grob2 = text_grob(paste0(hc.func,".", methods[c],
+        " wrong data score: ", round(score.cons, 4)), size = 12)
+        plot_1 = as_ggplot(t_grob1) + theme(plot.margin = margin(0,3,0,0, "cm"))
+        plot_2 = as_ggplot(t_grob2) + theme(plot.margin = margin(0,3,0,0, "cm"))
+        g1 = ggarrange(plot_1,ggarrange(p1.original, p2.original,
+                       ncol = 2), nrow = 2, heights = c(1,5))
+        g2 = ggarrange(plot_2, ggarrange(p1.cons, p2.cons,
+                       ncol = 2), nrow = 2, heights = c(1,5))
+        show(g1)
+        show(g2)
+      }
+      }else{
+        cons.hc = get(hc.func)(dist(scale(cons.data)))
+        cons.dend = convert_to_phylo(cons.hc)
+        score.cons =  L_score(cons.dend, original.data[, -3])
+        original.hc = get(hc.funct)(dist(scale(original.data[, -3])))
+        original.dend = convert_to_phylo(original.hc)
+        score.original = L_score(original.dend, original.data[, -3])
+        p1.original = fviz_dend(original.hc, k = nlvls)
+        factors = factor(cutree(original.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        p2.original = temp_data %>%
+          ggplot(aes(x = X1, y = X2, colour = labels)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+        p1.cons = fviz_dend(cons.hc, k = nlvls)
+        factors = factor(cutree(cons.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        p2.cons = temp_data %>%
+          ggplot(aes(x = X1, y = X2, colour = labels)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+        t_grob1 = text_grob(paste0(hc.func," original data score: ", 
+                                   round(score.original, 4)))
+        t_grob2 = text_grob(paste0(hc.func, " wrong data score: ", 
+                                   round(score.cons, 4)))
+        plot_1 = as_ggplot(t_grob1) + theme(plot.margin = margin(0,3,0,0, "cm"))
+        plot_2 = as_ggplot(t_grob2) + theme(plot.margin = margin(0,3,0,0, "cm"))
+        g1 = ggarrange(plot_1,ggarrange(p1.original, p2.original,
+                       ncol = 2), nrow = 2, heights = c(1,5))
+        g2 = ggarrange(plot_2, ggarrange(p1.cons, p2.cons,
+                       ncol = 2), nrow = 2, heights = c(1,5))
+        show(g1)
+        show(g2)
+      }
+    }else{
+        dists.length = length(dists)
+        for(h in 1:dists.length){
+        if(m > 0){
+        for(c in (1:m)){
+        cons.hc = get(hc.func)(dist(scale(cons.data), method = dists[h]), method = methods[c])
+        cons.dend = convert_to_phylo(cons.hc)
+        score.cons =  L_score(cons.dend, original.data[, -3])
+        original.hc = get(hc.func)(dist(scale(original.data[, -3]), method = dists[h]), 
+                             method = methods[c])
+        original.dend = convert_to_phylo(original.hc)
+        score.original = L_score(original.dend, original.data[, -3])
+        p1.original = fviz_dend(original.hc, k = nlvls)
+        factors = factor(cutree(original.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        p2.original = temp_data %>%
+          ggplot(aes(x = X1, y = X2, colour = labels)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+        p1.cons = fviz_dend(cons.hc, k = nlvls)
+        factors = factor(cutree(cons.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        p2.cons = temp_data %>%
+          ggplot(aes(x = X1, y = X2, colour = labels)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+        t_grob1 =  text_grob(paste0(hc.func,".", methods[c],
+          " original data with ",dists[h]," distance score: ",
+                                                           round(score.original, 4)))
+        t_grob2 = text_grob(paste0(hc.func,".", methods[c],
+         " wrong data with ", dists[h], " distance score: ", round(score.cons, 4)))
+        plot_1 = as_ggplot(t_grob1) + theme(plot.margin = margin(0,3,0,0, "cm"))
+        plot_2 = as_ggplot(t_grob2) + theme(plot.margin = margin(0,3,0,0, "cm"))
+        g1 = ggarrange(plot_1,ggarrange(p1.original, p2.original,
+                       ncol = 2), nrow = 2, heights = c(1,5))
+        g2 = ggarrange(plot_2, ggarrange(p1.cons, p2.cons,
+                       ncol = 2), nrow = 2, heights = c(1,5))
+        show(g1)
+        show(g2)
+      }
+        }else{
+        cons.hc = get(hc.func)(dist(scale(cons.data), method = dists[h]))
+        cons.dend = convert_to_phylo(cons.hc)
+        score.cons =  L_score(cons.dend, original.data[, -3])
+        original.hc = hclust(dist(scale(original.data[, -3]), method = dists[h]))
+        original.dend = convert_to_phylo(original.hc)
+        score.original = L_score(original.dend, original.data[, -3])
+        p1.original = fviz_dend(original.hc, k = nlvls)
+        factors = factor(cutree(original.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        p2.original = temp_data %>%
+          ggplot(aes(x = X1, y = X2, colour = labels)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+        p1.cons = fviz_dend(cons.hc, k = nlvls)
+        factors = factor(cutree(cons.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        p2.cons = temp_data %>%
+          ggplot(aes(x = X1, y = X2, colour = labels)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+        t_grob1 = text_grob(paste0(hc.func, " original data score: ", 
+                                   round(score.original, 4)))
+        t_grob2 =  text_grob(paste0(hc.func, " wrong data score: ", round(score.cons, 4)))
+        plot_1 = as_ggplot(t_grob1) + theme(plot.margin = margin(0,3,0,0, "cm"))
+        plot_2 = as_ggplot(t_grob2) + theme(plot.margin = margin(0,3,0,0, "cm"))
+        g1 = ggarrange(plot_1,ggarrange(p1.original, p2.original,
+                       ncol = 2), nrow = 2, heights = c(1,5))
+        g2 = ggarrange(plot_2, ggarrange(p1.cons, p2.cons,
+                       ncol = 2), nrow = 2, heights = c(1,5))
+        show(g1)
+        show(g2)
+  }
+  
+        }
+    }
+  }
+}
+```
+And now a list of all clustering methods and distances of interest:
+```{r}
+dists = c("euclidean", "manhattan", "canberra")
+test.list = list(hclust = c("ward.D", "single","ward.D2", "average", "complete", "mcquitty", "median", "centroid"), agnes = c("weighted", "complete", "average", "ward"), diana = NULL)
+```
+```{r warning = F, results = 'hide'}
+plot_all_scores(sim.data, X_3, test.list, dists)
+```
+\
+Another interesting test to do is plot the dendrogram with the real labels than the chosen clusters and compare it to the same scatterplot. For that, we have the following example:
+```{r}
+par(mfrow = c(1, 2), mar = c(2, 1.5, 2, 2))
+hc.func = hclust(dist(scale(sim.data[, -3])), method = "ward.D2")
+dend = as.dendrogram(hc.func)
+phylo = convert_to_phylo(hc.func)
+order = as.numeric(phylo$tip.label)
+labels = sim.data$Y[order]
+colors = ifelse(labels == 1, "red", "blue")
+dend2 = assign_values_to_leaves_edgePar(dend = dend, value = colors, edgePar = "col")
+labels = cutree(hc.func, k = 2)
+temp_data = sim.data[, -3]
+temp_data$labels = factor(labels)
+# plotando
+plot(dend2)
+plot(sim.data$X1, sim.data$X2, col = temp_data$labels, main = "Test title")
+```
+\
+Generalizing that for the above list of clustering methods:
+```{r warning = F, results = 'hide'}
+plot_all_scores_2 = function(original.data, cons.data, cl.list, dists = NA, nlvls = 2){
+  list.names = names(cl.list)
+  l = length(list.names)
+  par(mfrow = c(1, 2), mar = c(2, 1.5, 2, 2))
+  for(k in 1:l){
+    hc.func = list.names[k]
+    methods = cl.list[[hc.func]]
+    m = length(methods)
+    if(is.na(dists)){
+      if(m > 0){
+      for(c in 1:m){
+        # determining values of interest
+        # cons
+        cons.hc = get(hc.func)(dist(scale(cons.data)), method = methods[c])
+        cons.dend = as.dendrogram(cons.hc)
+        cons.phylo = convert_to_phylo(cons.hc)
+        score.cons =  L_score(cons.phylo, original.data[, -3])
+        order = as.numeric(cons.phylo$tip.label)
+        cons.labels = original.data$Y[order]
+        colors = ifelse(cons.labels == 1, "red", "blue")
+        cons.dend2 = assign_values_to_leaves_edgePar(dend = cons.dend, value = 
+                                                  colors, edgePar = "col")
+        
+        # original
+        original.hc = get(hc.func)(dist(scale(original.data[, -3])), method = methods[c])
+        original.dend = as.dendrogram(original.hc)
+        original.phylo = convert_to_phylo(original.hc)
+        score.original = L_score(original.phylo, original.data[, -3])
+        order = as.numeric(original.phylo$tip.label)
+        original.labels = original.data$Y[order]
+        colors = ifelse(original.labels == 1, "red", "blue")
+        original.dend2 = assign_values_to_leaves_edgePar(dend = original.dend, value = 
+                                                  colors, edgePar = "col")
+        
+        
+        # plotting for original
+        plot(original.dend2)
+        factors = factor(cutree(original.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        plot(temp_data$X1, temp_data$X2, col = temp_data$labels, 
+             main = paste0(hc.func,".", methods[c], 
+                      "original data \n score: ", round(score.original, 4)))
+        
+        # plotting for fake
+        plot(cons.dend2)
+        factors = factor(cutree(cons.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        plot(temp_data$X1, temp_data$X2, col = temp_data$labels, 
+             main = paste0(hc.func,".", methods[c],
+                          "wrong data  \n score: ", round(score.cons, 4)))
+        
+      }
+      }else{
+        
+        # determining values of interest
+        # cons
+        cons.hc = get(hc.func)(dist(scale(cons.data)))
+        cons.dend = as.dendrogram(cons.hc)
+        cons.phylo = convert_to_phylo(cons.hc)
+        score.cons =  L_score(cons.phylo, original.data[, -3])
+        order = as.numeric(cons.phylo$tip.label)
+        cons.labels = original.data$Y[order]
+        colors = ifelse(cons.labels == 1, "red", "blue")
+        cons.dend2 = assign_values_to_leaves_edgePar(dend = cons.dend, value = 
+                                                  colors, edgePar = "col")
+        
+        # original
+        original.hc = get(hc.func)(dist(scale(original.data[, -3])))
+        original.dend = as.dendrogram(original.hc)
+        original.phylo = convert_to_phylo(original.hc)
+        score.original = L_score(original.phylo, original.data[, -3])
+        order = as.numeric(original.phylo$tip.label)
+        original.labels = original.data$Y[order]
+        colors = ifelse(original.labels == 1, "red", "blue")
+        original.dend2 = assign_values_to_leaves_edgePar(dend = original.dend, value = 
+                                                  colors, edgePar = "col")
+        
+        
+        # plotting for original
+        plot(original.dend2)
+        factors = factor(cutree(original.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        plot(temp_data$X1, temp_data$X2, col = temp_data$labels, 
+             main = paste0(hc.func,
+                              " original data \n score: ", round(score.original, 4)))
+        
+        # plotting for fake
+        plot(cons.dend2)
+        factors = factor(cutree(cons.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        plot(temp_data$X1, temp_data$X2, col = temp_data$labels, 
+             main = paste0(hc.func,
+                              " wrong data \n score: ", round(score.cons, 4)))
+        
+      }
+    }else{
+        dists.length = length(dists)
+        for(h in 1:dists.length){
+        if(m > 0){
+        for(c in (1:m)){
+        # determining values of interest
+        # cons
+        cons.hc = get(hc.func)(dist(scale(cons.data), method = dists[h]), method = methods[c])
+        cons.dend = as.dendrogram(cons.hc)
+        cons.phylo = convert_to_phylo(cons.hc)
+        score.cons =  L_score(cons.phylo, original.data[, -3])
+        order = as.numeric(cons.phylo$tip.label)
+        cons.labels = original.data$Y[order]
+        colors = ifelse(cons.labels == 1, "red", "blue")
+        cons.dend2 = assign_values_to_leaves_edgePar(dend = cons.dend, value = 
+                                                  colors, edgePar = "col")
+        
+        # original
+        original.hc = get(hc.func)(dist(scale(original.data[, -3]), method = dists[h]), 
+                                        method = methods[c])
+        original.dend = as.dendrogram(original.hc)
+        original.phylo = convert_to_phylo(original.hc)
+        score.original = L_score(original.phylo, original.data[, -3])
+        order = as.numeric(original.phylo$tip.label)
+        original.labels = original.data$Y[order]
+        colors = ifelse(original.labels == 1, "red", "blue")
+        original.dend2 = assign_values_to_leaves_edgePar(dend = original.dend, value = 
+                                                  colors, edgePar = "col")
+        
+        # plotting for original
+        plot(original.dend2)
+        factors = factor(cutree(original.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        plot(temp_data$X1, temp_data$X2, col = temp_data$labels, 
+             main = paste0(hc.func,".", methods[c],
+                            " original data with \n",dists[h]," distance score: ",
+                              round(score.original, 4)))
+        
+        # plotting for fake
+        plot(cons.dend2)
+        factors = factor(cutree(cons.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        plot(temp_data$X1, temp_data$X2, col = temp_data$labels, 
+             main  = paste0(hc.func,".", methods[c],
+                  " wrong data with \n", dists[h], " distance score: ", round(score.cons, 4)))
+        
+      }
+        }else{
+          
+          
+          # determining values of interest
+        # cons
+        cons.hc = get(hc.func)(dist(scale(cons.data), method = dists[h]))
+        cons.dend = as.dendrogram(cons.hc)
+        cons.phylo = convert_to_phylo(cons.hc)
+        score.cons =  L_score(cons.phylo, original.data[, -3])
+        order = as.numeric(cons.phylo$tip.label)
+        cons.labels = original.data$Y[order]
+        colors = ifelse(cons.labels == 1, "red", "blue")
+        cons.dend2 = assign_values_to_leaves_edgePar(dend = cons.dend, value = 
+                                                  colors, edgePar = "col")
+        
+        # original
+        original.hc = get(hc.func)(dist(scale(original.data[, -3]), method = dists[h]))
+        original.dend = as.dendrogram(original.hc)
+        original.phylo = convert_to_phylo(original.hc)
+        score.original = L_score(original.phylo, original.data[, -3])
+        order = as.numeric(original.phylo$tip.label)
+        original.labels = original.data$Y[order]
+        colors = ifelse(original.labels == 1, "red", "blue")
+        original.dend2 = assign_values_to_leaves_edgePar(dend = original.dend, value = 
+                                                  colors, edgePar = "col")
+          
+        
+        # plotting for original
+        plot(original.dend2)
+        factors = factor(cutree(original.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        plot(temp_data$X1, temp_data$X2, col = temp_data$labels, 
+             main = paste0(hc.func, 
+                        " original data \n score: ", round(score.original, 4)))
+        
+        # plotting for fake
+        plot(cons.dend2)
+        factors = factor(cutree(cons.hc, k = nlvls))
+        temp_data = original.data[, -3]
+        temp_data$labels = factors
+        plot(temp_data$X1, temp_data$X2, col = temp_data$labels, 
+             main  = paste0(hc.func,".", methods[c],
+                  " wrong data with \n", dists[h], " distance score: ", round(score.cons, 4)))
+        
+
+  }
+  
+        }
+    }
+  }
+}
+```
+```{r}
+dists = c("euclidean", "manhattan", "canberra")
+test.list = list(hclust = c("ward.D", "single","ward.D2", "average", "complete", "mcquitty", "median", "centroid"), agnes = c("weighted", "complete", "average", "ward"), diana = NULL)
+```
+```{r warning = F, results = 'hide'}
+plot_all_scores_2(sim.data, X_3, test.list, dists)
+```
+\
+One other important thing to do is verify the alteration made to the score when we multiply each branch by a constant $c$. We can take the trees generated by hierarchical clustering with mccquity and complete method and multiply each branch by $10$ and $100$, assessing the effect of branch sizes in the score (brownian motiom): \
+**Mcquitty modified trees and scores:**
+```{r}
+mcquitty.hc = hclust(dist(scale(sim.data[, -3])), 
+                             method = "mcquitty")
+mcquitty.dend = convert_to_phylo(mcquitty.hc)
+# multiplying by 10
+mcquitty.dend$edge.length = (mcquitty.dend$edge.length * 10)
+score.mcquitty_10 = L_score(mcquitty.dend, sim.data[, -3])
+
+# multiplying by 100
+mcquitty.dend$edge.length = (mcquitty.dend$edge.length * 100)
+score.mcquitty_100 = L_score(mcquitty.dend, sim.data[, -3])
+
+cat("Mcquitty score for 10*branches: ", score.mcquitty_10, "\n")
+cat("Mcquitty score for 100*branches: ", score.mcquitty_100)
+```
+**Complete modified trees and scores:**
+```{r}
+complete.hc = hclust(dist(scale(sim.data[, -3])), 
+                             method = "complete")
+complete.dend = convert_to_phylo(complete.hc)
+# multiplying by 10
+complete.dend$edge.length = (complete.dend$edge.length * 10)
+score.complete_10 = L_score(complete.dend, sim.data[, -3])
+
+# multiplying by 100
+complete.dend$edge.length = (complete.dend$edge.length * 100)
+score.complete_100 = L_score(complete.dend, sim.data[, -3])
+
+cat("Complete score for 10*branches: ", score.complete_10, "\n")
+cat("Complete score for 100*branches: ", score.complete_100)
+```
+So, according to these tests, there appear to be no difference between the scores, meaning that our score is invariant to scale modification, which is a good feature. We can also make a better separation between $(X_1, X_2, Y = 0)$ and $(X_1, X_2, Y= 1)$, repeating the proof of consent made above by several graphs: \
+**Simulating more "separated" data**
+```{r}
+set.seed(500)
+n = 100
+p = 2
+
+Y = sample(c(0, 1), n, replace = TRUE, prob = c(0.5, 0.5))
+mu_0 = c(0, 0)
+mu_1 = c(8, 8)
+S = diag(nrow = 2, ncol = 2)
+
+
+X = matrix(nrow = n, ncol = p)
+X[Y == 0, ] = round(mvrnorm(sum(Y == 0), mu_0, S), 4)
+X[Y == 1, ] = round(mvrnorm(sum(Y == 1), mu_1, S), 4)
+
+sim.data = as.data.frame(cbind(X , Y))
+sim.data$Y = as.factor(Y)
+colnames(sim.data) = c("X1", "X2", "Y")
+row.names(sim.data) = c(1:nrow(sim.data))
+head(sim.data, 4)
+
+# wrong data
+X_3 = data.frame(X3 = rexp(n, 1))
+head(X_3)
+```
+**Plotting**
+```{r}
+plot_all_scores(sim.data, X_3, test.list, dists)
+```
+```{r}
+plot_all_scores_2(sim.data, X_3, test.list, dists)
+```
+\
+**Simulating data with 3 groups**
+```{r}
+set.seed(500)
+n = 100
+p = 2
+
+Y = sample(c(0, 1, 2), n, replace = TRUE, prob = c(1/3, 1/3, 1/3))
+mu_0 = c(1, 0)
+mu_1 = c(2, 3)
+mu_2 = c(-2, 6)
+S = diag(nrow = 2, ncol = 2)
+
+
+X = matrix(nrow = n, ncol = p)
+X[Y == 0, ] = round(mvrnorm(sum(Y == 0), mu_0, S), 4)
+X[Y == 1, ] = round(mvrnorm(sum(Y == 1), mu_1, S), 4)
+X[Y == 2, ] = round(mvrnorm(sum(Y == 2), mu_2, S), 4)
+
+sim.data = as.data.frame(cbind(X , Y))
+sim.data$Y = as.factor(Y)
+colnames(sim.data) = c("X1", "X2", "Y")
+row.names(sim.data) = c(1:nrow(sim.data))
+head(sim.data, 4)
+
+# wrong data
+X_3 = data.frame(X3 = rexp(n, 1))
+head(X_3)
+
+# defining distances and methods again
+dists = c("euclidean", "manhattan", "canberra")
+test.list = list(hclust = c("ward.D", "single","ward.D2", "average", "complete", "mcquitty", "median", "centroid"), agnes = c("weighted", "complete", "average", "ward"), diana = NULL)
+```
+```{r}
+sim.data %>%
+          ggplot(aes(x = X1, y = X2, colour = Y)) +
+          geom_point() +
+          labs(x = "X1",
+                y = "X2",
+                colour = "Labels") +
+          scale_colour_brewer(palette = "Set1") +
+          theme_minimal()
+```
+\
+Plotting all graphs for $k = 3$:
+```{r}
+plot_all_scores(sim.data, X_3, test.list, dists, nlvls = 3)
+```
+
+
+
+

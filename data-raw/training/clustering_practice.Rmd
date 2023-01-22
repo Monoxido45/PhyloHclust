@@ -1,0 +1,699 @@
+---
+title: "Clustering Practice"
+output: html_document
+---
+```{r global_options, message=FALSE, include=FALSE}
+```
+Using dplyr, tidyr and other packages
+```{r message=FALSE, include=FALSE}
+library(dplyr)
+library(tidyr)
+library(cluster)
+library(tibble)
+library(magrittr)
+library(factoextra)
+library(ggplot2)
+library(Hmisc)
+library(GGally)
+library(gridExtra)
+library(reshape2)
+library(clValid)
+library(NbClust)
+library(fpc)
+library(ggpubr)
+library(tidyverse)
+library(ggpubr)
+```
+First, we will practice with R built-in datasets, like USArrests
+```{r}
+data("USArrests")
+arrests_df = USArrests %>%
+  as_tibble()
+arrests_df
+```
+Describing the data
+```{r}
+describe(arrests_df)
+```
+\
+Summarizing
+```{r}
+summary(arrests_df)
+```
+\
+Viewing histogram and multivariate plots:
+```{r}
+arr.colnames = arrests_df %>%
+  colnames()
+graphs = list()
+for (j in (1:ncol(arrests_df))){
+  graphs[[j]] = arrests_df %>%
+  ggplot(aes_string(x = arr.colnames[j])) +
+  geom_histogram(bins = 18, fill="#69b3a2", color="#e9ecef", alpha=0.9)
+}
+hist.arr = do.call(grid.arrange, graphs)
+```
+```{r}
+mult.arr = ggpairs(arrests_df, diag = list(continuous = "barDiag")) + theme_bw()
+mult.arr
+```
+Creating some boxplots:
+```{r}
+# melting dataframe
+melted_df = melt(arrests_df)
+melted_df %>% ggplot(aes(x = variable, y = value, fill = variable)) + 
+  geom_boxplot() + 
+  xlab("variables")
+```
+\
+Plotting the heatmatrix of correlations
+```{r}
+ggcorr(arrests_df, method = c("everything", "pearson"))
+```
+\
+Applying some hierarchical clustering and k-means methods in the data. But first, we will compute some dissimilarity matrix and evaluate them.
+```{r}
+# scaling the data
+arrests_df = arrests_df %>%
+  scale()
+
+arr.eucl_dist = get_dist(arrests_df, method = "euclidean")
+arr.pearson_dist = get_dist(arrests_df, method = "pearson")
+fviz_dist(arr.pearson_dist)
+```
+Now computing all clustering methods using eclust (good to make other graphs).
+```{r}
+# computing diana
+arr.diana = arrests_df %>% 
+  eclust(FUNcluster = "diana", hc_metric = "euclidean")
+
+# computing agglomerative hclust with average linkage and ward linkage
+arr.av_hc = arrests_df %>%
+  eclust(FUNcluster = "hclust", hc_method = "average")
+
+arr.wd_hc = arrests_df %>%
+  eclust(FUNcluster = "hclust", hc_method = "ward.D2")
+
+
+# computing agnes (agglomerative nesting (Hierarchical Clustering)) with ward linkage
+arr.agnes = arrests_df %>%
+  eclust(FUNcluster = "agnes", hc_metric = "euclidean")
+
+# computing k-means
+arr.km = arrests_df %>%
+  eclust(FUNcluster = "kmeans", nstart = 25)
+
+hc_list = list('Average linkage' = arr.av_hc, 
+               'Ward linkage' = arr.wd_hc, 
+               'Agnes' = arr.agnes, 
+               'Diana' = arr.diana)
+```
+\
+Assessing the optimal number of clusters in k-means according to gap statistics, silhouette plot and elbow method.
+```{r}
+fviz_gap_stat(arr.km$gap_stat)
+```
+\
+So, the optimal number of clusters is $k = 4$, according to the Gap statistic. This is emphasized by the following result:
+```{r}
+arr.km$nbclust
+```
+\
+Assessing the silhouette measure of K-means with 4 clusters.
+```{r}
+fviz_silhouette(arr.km)
+```
+\
+but, we can investigate the problem of determining the optimal number of clusters more further, plotting some scores and methods for each number of clusters in between 1 and 10 clusters. Inittialy, we analyse the optimal number of clusters according to the silhouette method:
+```{r}
+fviz_nbclust(arrests_df, kmeans, method = "silhouette") + 
+  labs(subtitle = "Silhouette method")
+```
+\
+Assessing the number of clusters using the Elbow method:
+```{r}
+fviz_nbclust(arrests_df, kmeans, method = "wss") +
+  labs(subtitle = "Elbow method")
+```
+\
+Viewing the correspondent values of average silhouette measure for $k = 4$.
+```{r}
+km.stats = cluster.stats(arr.eucl_dist, arr.km$cluster)
+print(km.stats$dunn)
+print(km.stats$dunn2)
+print(km.stats$avg.silwidth)
+```
+And the indices distribution, which points out the amount of indices that recommend each $k$  as the optimal number of clusters.
+```{r include=FALSE}
+km.nbclust= NbClust(data = arrests_df, distance = "euclidean", min.nc = 2, max.nc = 10, method = "kmeans")
+km.index = data.frame(km.nbclust$All.index)
+km.index$index = row.names(km.index)
+```
+```{r}
+plot1 <- km.index %>%
+  ggplot(aes(x = index, y  = Hubert, group = 1)) +
+  geom_line(linetype = "dashed") +
+  geom_point()
+
+
+plot2 <- km.index %>%
+  ggplot(aes(x = index, y = Dindex, group = 1))+
+  geom_line(linetype = "dashed")+
+  geom_point()
+
+plot3 <- km.index %>%
+  ggplot(aes(x = index, y = SDindex, group = 1))+
+  geom_line(linetype = "dashed")+
+  geom_point()
+
+ggarrange(plot1, ggarrange(plot2, plot3, labels = c("Dindex", "SDindex"),
+                           hjust = c(0,0), vjust = c(0.5, 0.5)),
+          labels = "Hubert", nrow = 2, hjust = 0,
+          vjust = 1.25)
+```
+This frequency distribution can be seen in the graph below:
+```{r}
+fviz_nbclust(km.nbclust, ggtheme = theme_minimal())
+```
+Plotting Kmeans clustering with $k = 2$
+```{r}
+arr.km2 = eclust(arrests_df, FUNcluster = "kmeans", k = 2)
+```
+Computing the average silhouette and dunn measures for $k = 2$:
+```{r}
+km.stats = cluster.stats(arr.eucl_dist, arr.km2$cluster)
+print(km.stats$dunn)
+print(km.stats$dunn2)
+print(km.stats$avg.silwidth)
+```
+Thus, for K-means clustering, the better choices for $k$ are $k = 2$ or $k = 4$, having $k = 4$ as an interesting choice because of the gap statistics results along with the amount of other measures that asserts the choice of $k = 4$ as an optimum number of clusters.
+
+We also can work with hiearchical clustering methods and assess them. The following dendrograms are generated by each hierachical method chosen.
+```{r}
+plot_list = list()
+for (i in (1:length(hc_list))){
+  plot_list[[i]] = fviz_dend(hc_list[[i]], rect = TRUE,
+                             main = names(hc_list)[i])
+}
+hc_dends = do.call(grid.arrange, plot_list)
+hc_dends
+```
+With each correspondent silhouette plot and silhouette average width for $k = 3$
+```{r}
+plot_list = list()
+for(i in (1:length(hc_list))){
+  plot_list[[i]] = fviz_silhouette(hc_list[[i]], main = names(hc_list)[i])
+}
+hc_sill = do.call(grid.arrange, plot_list)
+```
+And average silhouette width of each hiearchical clustering method
+```{r}
+sil_list = list()
+for(i in (1:length(hc_list))){
+  silinfo = hc_list[[i]]$silinfo
+  sil_list[names(hc_list)[i]] = silinfo$avg.width
+}
+print(sil_list)
+```
+Now, concerning the optimum number of clusters for each method, we initially repeat all the plots made above for hierarchical methods, starting with:
+*Gap statistics*
+```{r}
+ fviz_gap_stat(hc_list[[1]]$gap_stat) +
+    labs(subtitle = "Gap statistics for hierarchical clustering")
+```
+*Silhouette method*
+```{r}
+fviz_nbclust(arrests_df, FUNcluster = hcut, method = "silhouette") + 
+  labs(subtitle = "silhouette method")
+```
+*Elbow method*
+```{r}
+fviz_nbclust(arrests_df, FUNcluster = hcut, method = "wss") + 
+  labs(subtitle = "Elbow method")
+```
+Which gives us a hint that  $k = 2$ is somewhat an interesting choice for the number of clusters in the hierarchical methods.
+Now, we analyse the frequency of each optimum $k$
+```{r results = 'hide', warning = FALSE , message = FALSE}
+hc.nbclust= NbClust(data = arrests_df, distance = "euclidean", min.nc = 2, max.nc = 10, method = "ward.D2")
+hc.index = data.frame(hc.nbclust$All.index)
+hc.index$index = row.names(hc.index)
+```
+```{r}
+plot1 <- hc.index %>%
+  ggplot(aes(x = index, y  = Hubert, group = 1)) +
+  geom_line(linetype = "dashed") +
+  geom_point()
+
+
+plot2 <- hc.index %>%
+  ggplot(aes(x = index, y = Dindex, group = 1))+
+  geom_line(linetype = "dashed")+
+  geom_point()
+
+plot3 <- hc.index %>%
+  ggplot(aes(x = index, y = SDindex, group = 1))+
+  geom_line(linetype = "dashed")+
+  geom_point()
+
+ggarrange(plot1, ggarrange(plot2, plot3, labels = c("Dindex", "SDindex"),
+                           hjust = c(0,0), vjust = c(0.5, 0.5)),
+          labels = "Hubert", nrow = 2, hjust = 0,
+          vjust = 1.25)
+```
+
+```{r}
+fviz_nbclust(hc.nbclust, ggtheme = theme_minimal())
+```
+\
+Giving the same result as revealed above for K-means. But, apart from only assessing the number of clusters, we will now make internal cluster validation, seeeking the best clustering methods according to each measure of each type of validation. So, we will analyse graphically some clustering validations methods assessing: \
+*stability*
+```{r results = 'hide', warning = FALSE , message = FALSE}
+cl_methods = c("hierarchical", "agnes" , "diana", "kmeans")
+n = 2:10
+better_stability = clValid(arrests_df, n, cl_methods,validation = "stability" ,metric = "euclidean", method = "ward")
+optim.stab = optimalScores(better_stability)
+
+# trying to plot using ggplot
+# first converting the data to data frame
+str(better_stability)
+measures = better_stability@measures
+```
+```{r}
+
+for (i in 1:length(cl_methods)){
+  local_measure = measures[, , cl_methods[i]]
+  names.row = rownames(local_measure)
+  names.col = colnames(local_measure)
+  for (j in 1:nrow(local_measure)){
+  rep.clustering = rep(cl_methods[i], ncol(local_measure))
+  rep.row = rep(names.row[j],ncol(local_measure))
+  row = local_measure[j, 1:length(n)]
+  col.names = as.integer(names(row))
+  if (j == 1 && i == 1){
+  stab.data = data.frame("clustering" = rep.clustering,
+                    "type" = rep.row,
+                    "nclust" = col.names,
+                    "measurement" = row)
+  }
+  else{
+    new_data = data.frame("clustering" = rep.clustering,
+                    "type" = rep.row,
+                    "nclust" = col.names,
+                    "measurement" = row)
+    stab.data = bind_rows(stab.data, new_data)
+  }
+  }
+}
+
+plot1 <- stab.data %>%
+  filter( type == "APN") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+plot2 <- stab.data %>%
+  filter( type == "AD") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+plot3 <- stab.data %>%
+  filter( type == "ADM") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+plot4 <- stab.data %>%
+  filter( type == "FOM") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+
+ggarrange(plot1, plot2, plot3, plot4, labels = c("APN", "AD", "ADM", "FOM"),
+          ncol = 2, nrow = 2, hjust = c(-0.1, -0.5, -0.1, -0.5),
+          vjust = c(1.5, 1.5, 0.25, 0.25), common.legend = TRUE)
+```
+\ with the respective optimum statistics:
+```{r}
+print(optim.stab)
+```
+
+\ *internal measures*
+```{r results = 'hide', warning = FALSE , message = FALSE}
+better_internal_measures = clValid(arrests_df, n, cl_methods,validation = "internal" ,metric = "euclidean", method = "ward")
+optim.intern = optimalScores(better_internal_measures)
+str(better_internal_measures)
+measures = better_internal_measures@measures
+```
+```{r}
+for (i in 1:length(cl_methods)){
+  local_measure = measures[, , cl_methods[i]]
+  names.row = rownames(local_measure)
+  names.col = colnames(local_measure)
+  for (j in 1:nrow(local_measure)){
+  rep.clustering = rep(cl_methods[i], ncol(local_measure))
+  rep.row = rep(names.row[j],ncol(local_measure))
+  row = local_measure[j, 1:length(n)]
+  col.names = as.integer(names(row))
+  if (j == 1 && i == 1){
+  intern.data = data.frame("clustering" = rep.clustering,
+                    "type" = rep.row,
+                    "nclust" = col.names,
+                    "measurement" = row)
+  }
+  else{
+    new_data = data.frame("clustering" = rep.clustering,
+                    "type" = rep.row,
+                    "nclust" = col.names,
+                    "measurement" = row)
+    intern.data = bind_rows(intern.data, new_data)
+  }
+  }
+}
+
+plot1 <- intern.data %>%
+  filter( type == "Connectivity") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+plot2 <- intern.data %>%
+  filter( type == "Dunn") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+plot3 <- intern.data %>%
+  filter( type == "Silhouette") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+
+ggarrange(plot1, 
+             ggarrange(plot2, plot3, ncol = 2, labels = c("Dunn", "Silhouette"),
+                       vjust = c(0.25, 0.25)), 
+             nrow = 2, labels = "Connectivity", vjust = 0.15, 
+          hjust = -0.25, common.legend = TRUE)
+
+```
+\
+with the respective optimum statistics:
+```{r}
+print(optim.intern)
+```
+\
+So, according to the graphs and the above summary, we conclude that diana with $k = 2$ is the best clustering method for this dataset. Now that we analysed this built-in data, lets move forward to a new real one:\
+*Indian Primer League dataset*
+```{r}
+league_df = read.csv("datasets/total_data_na.csv") %>%
+  tibble()
+league_df
+```
+Since we dont have any informations about the variables, and there are many, we will skip the descriptive/graphic part and go straight ahead to the clustering analysis. Before moving forward, lets make a heatmatrix graph for assessing correlations, and after this, feature scalling (except in variables: PLAYER, BBI,
+X5w, y)
+```{r}
+ggcorr(league_df %>%
+         select(-c(PLAYER)), method = c("everything", "pearson"))
+```
+\ Removing variable y and BBI
+```{r}
+league_df = league_df %>%
+  select(-c(y, BBI))
+
+```
+```{r results = 'hide', warning = FALSE , message = FALSE} 
+# substituing missing values by mean and scaling
+league_df = league_df %>%
+ mutate(Avg.x = as.numeric(as.character(Avg.x)),
+               Avg.y =as.numeric(as.character(Avg.y)),
+          SR.y = as.numeric(as.character(SR.y))) %>%
+  mutate(across(where(is.numeric), zoo::na.aggregate)) %>%
+  mutate(across(-c(PLAYER), scale))
+league_df
+```
+\
+Now, we can analyse clustering tendencies, and how clusterable the data is (accordinto to hopkins statistics)
+```{r}
+gradient.color = list(low = "steelblue", high = "white")
+clust_tend.league = league_df[, -1] %>%
+  get_clust_tendency(n = 100, gradient = gradient.color)
+```
+with the following hopkins statistics:
+```{r}
+clust_tend.league$hopkins_stat
+```
+and with respective trend plot:
+```{r}
+clust_tend.league$plot
+```
+\
+The hopkins statistics and the plot show that our current data is very clusterable. So, we can move forward with a cluster analysis of the data similar to the previous one:
+```{r}
+# computing diana
+league.names = league_df[1]
+league_df = league_df %>%
+  select(-c(PLAYER))
+
+league.diana = league_df %>% 
+  eclust(FUNcluster = "diana", hc_metric = "euclidean")
+
+# computing agglomerative hclust with ward linkage
+league.wd_hc = league_df %>%
+  eclust(FUNcluster = "hclust", hc_method = "ward.D2")
+
+
+# computing agnes (agglomerative nesting (Hierarchical Clustering)) with ward linkage
+league.agnes = league_df %>%
+  eclust(FUNcluster = "agnes", hc_metric = "euclidean")
+
+# computing k-means
+league.km = league_df %>%
+  eclust(FUNcluster = "kmeans", nstart = 25)
+
+clust_list = list('K means' = league.km,
+               'Ward linkage' = league.wd_hc, 
+               'Agnes' = league.agnes, 
+               'Diana' = league.diana)
+```
+\ assessing the optimal number of clusters in all chosen clustering techiniques accordingo to:
+*Gap statistics*
+```{r}
+km.gap = fviz_gap_stat(league.km$gap_stat)
+hc.gap = fviz_gap_stat(league.wd_hc$gap_stat)
+ggarrange(km.gap, hc.gap, labels = c("km", "hclust"), hjust = c(-0.75, 0.25))
+```
+\
+*Silhouette*
+```{r}
+sil.km = fviz_nbclust(league_df, FUNcluster = kmeans, method = "silhouette") + 
+  labs(subtitle = "silhouette method")
+sil.hc= fviz_nbclust(league_df, FUNcluster = hcut, method = "silhouette") + 
+  labs(subtitle = "silhouette method")
+
+ggarrange(sil.km, sil.hc, labels = c("km", "hclust"), hjust = c(-0.5, 0),nrow = 2,
+          vjust = c(1.5, 0.5))
+```
+\ *Elbow method*
+```{r}
+hc.elbow = fviz_nbclust(league_df, FUNcluster = hcut, method = "wss") + 
+  labs(subtitle = "Elbow method")
+
+km.elbow = fviz_nbclust(arrests_df, FUNcluster = kmeans, method = "wss") + 
+  labs(subtitle = "Elbow method")
+
+ggarrange(km.elbow, hc.elbow, labels = c("km", "hclust"), hjust = c(-0.75, 0),nrow = 2,
+          vjust = c(1, 0.5))
+```
+\ 
+*Silhouette plot*
+```{r}
+plot_list = list()
+for(i in (1:length(clust_list))){
+  plot_list[[i]] = fviz_silhouette(clust_list[[i]], main = names(clust_list)[i])
+}
+
+ggarrange(plotlist = plot_list, ncol = 2, nrow = 2)
+
+```
+\
+Before we continue with the determination of the best number of clusters and method among the chosen, lets see the dendrograms produced by each hierarchical method: \
+*Ward agglomerative*
+```{r}
+fviz_dend(clust_list[[2]], rect = TRUE,
+                             main = names(clust_list)[2])
+```
+\
+*Agnes*
+```{r}
+fviz_dend(clust_list[[3]], rect = TRUE,
+                             main = names(clust_list)[3])
+```
+\
+*Diana*
+```{r}
+fviz_dend(clust_list[[4]], rect = TRUE,
+                             main = names(clust_list)[4])
+```
+\
+And now, after displaying all the dendrograms, lets analyse the distribution of the number of clusters  in k-means and hierarchical methods:
+```{r results = 'hide', warning = FALSE , message = FALSE}
+hc.nbclust = NbClust(data = league_df, distance = "euclidean", min.nc = 2, max.nc = 10, method = "ward.D2")
+
+km.nbclust = NbClust(data = league_df, distance = "euclidean", min.nc = 2, max.nc = 10, method = "kmeans")
+
+```
+```{r}
+
+hc.nbgraph = fviz_nbclust(hc.nbclust, ggtheme = theme_minimal()) +
+  ylim(0,8)
+km.nbgraph = fviz_nbclust(km.nbclust, ggtheme = theme_minimal()) + 
+  ylim(0,8)
+
+ggarrange(hc.nbgraph, km.nbgraph, nrow = 2, labels = c("hc", "km"),
+          hjust = c(-25, -20))
+```
+\
+And now, using stability and internal measures for clusterin validation, we will assess all methods and choose the best in each measure.\
+*Stability measures*
+```{r  results = 'hide', warning = FALSE , message = FALSE}
+cl_methods = c("hierarchical", "agnes" , "diana", "kmeans")
+n = 2:10
+better_stability = clValid(as.matrix(league_df), n, cl_methods, 
+                           validation ="stability",
+                           metric = "euclidean", method = "ward")
+optim.stab = optimalScores(better_stability)
+
+# copying the code above
+
+# trying to plot using ggplot
+# first converting the data to data frame
+str(better_stability)
+measures = better_stability@measures
+```
+```{r}
+
+for (i in 1:length(cl_methods)){
+  local_measure = measures[, , cl_methods[i]]
+  names.row = rownames(local_measure)
+  names.col = colnames(local_measure)
+  for (j in 1:nrow(local_measure)){
+  rep.clustering = rep(cl_methods[i], ncol(local_measure))
+  rep.row = rep(names.row[j],ncol(local_measure))
+  row = local_measure[j, 1:length(n)]
+  col.names = as.integer(names(row))
+  if (j == 1 && i == 1){
+  stab.data = data.frame("clustering" = rep.clustering,
+                    "type" = rep.row,
+                    "nclust" = col.names,
+                    "measurement" = row)
+  }
+  else{
+    new_data = data.frame("clustering" = rep.clustering,
+                    "type" = rep.row,
+                    "nclust" = col.names,
+                    "measurement" = row)
+    stab.data = bind_rows(stab.data, new_data)
+  }
+  }
+}
+
+plot1 <- stab.data %>%
+  filter( type == "APN") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+plot2 <- stab.data %>%
+  filter( type == "AD") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+plot3 <- stab.data %>%
+  filter( type == "ADM") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+plot4 <- stab.data %>%
+  filter( type == "FOM") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+
+ggarrange(plot1, plot2, plot3, plot4, labels = c("APN", "AD", "ADM", "FOM"),
+          ncol = 2, nrow = 2, hjust = c(-0.1, -0.5, -0.1, -0.5),
+          vjust = c(1.5, 1.5, 0.25, 0.25), common.legend = TRUE)
+```
+
+```{r}
+print(optim.stab)
+```
+
+\ *internal measures*
+```{r results = 'hide', warning = FALSE , message = FALSE}
+better_internal_measures = clValid(as.matrix(league_df), n, cl_methods,validation = "internal" ,metric = "euclidean", method = "ward")
+optim.intern = optimalScores(better_internal_measures)
+str(better_internal_measures)
+measures = better_internal_measures@measures
+```
+```{r}
+for (i in 1:length(cl_methods)){
+  local_measure = measures[, , cl_methods[i]]
+  names.row = rownames(local_measure)
+  names.col = colnames(local_measure)
+  for (j in 1:nrow(local_measure)){
+  rep.clustering = rep(cl_methods[i], ncol(local_measure))
+  rep.row = rep(names.row[j],ncol(local_measure))
+  row = local_measure[j, 1:length(n)]
+  col.names = as.integer(names(row))
+  if (j == 1 && i == 1){
+  intern.data = data.frame("clustering" = rep.clustering,
+                    "type" = rep.row,
+                    "nclust" = col.names,
+                    "measurement" = row)
+  }
+  else{
+    new_data = data.frame("clustering" = rep.clustering,
+                    "type" = rep.row,
+                    "nclust" = col.names,
+                    "measurement" = row)
+    intern.data = bind_rows(intern.data, new_data)
+  }
+  }
+}
+
+plot1 <- intern.data %>%
+  filter( type == "Connectivity") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+plot2 <- intern.data %>%
+  filter( type == "Dunn") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+plot3 <- intern.data %>%
+  filter( type == "Silhouette") %>%
+  ggplot( aes(x = nclust, y  = measurement, group = clustering)) +
+  geom_line(aes(linetype = clustering, color = clustering)) +
+  geom_point(aes(shape = clustering))
+
+
+ggarrange(plot1, 
+             ggarrange(plot2, plot3, ncol = 2, labels = c("Dunn", "Silhouette"),
+                       vjust = c(0.25, 0.25)), 
+             nrow = 2, labels = "Connectivity", vjust = 0.15, 
+          hjust = -0.25, common.legend = TRUE)
+
+```
+\
+with the respective optimum statistics:
+```{r}
+print(optim.intern)
+```

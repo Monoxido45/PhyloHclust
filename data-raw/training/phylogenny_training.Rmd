@@ -1,0 +1,124 @@
+---
+title: "SIMMAP and phylogenetic practices in R"
+author: "Luben"
+date: "30/08/2020"
+output: html_document
+---
+Importing needed packages
+```{r message=FALSE, include=FALSE}
+library(ape)
+library(phangorn)
+library(phytools)
+library(geiger)
+library(magrittr)
+library(mltools)
+```
+Testing ape and plotting some trees from newick text format
+```{r}
+tree.string = "(D,(C,(A,B)));"
+tree.obj = read.tree(text = tree.string)
+plot(tree.obj, no.margin = TRUE, edge.width = 2)
+```
+\ 
+Now testing simmap from phytools in a given dataset
+```{r}
+# reading data, and plotting
+X = read.csv("elopomorph.csv", row.names = 1)
+elop.tree = read.tree("elopomorph.tre")
+
+feed.mode = setNames(X[, 1], rownames(X))
+
+# defining the variable classifying the feed mode of the current specie
+head(X)
+```
+```{r}
+# para fazer o gráfico 
+# plotTree(elop.tree,type="fan",fsize=0.7,ftype="i",lwd=1)
+# cols<-setNames(c("red","blue"),levels(feed.mode))
+# tiplabels(pie=to.matrix(feed.mode[elop.tree$tip.label],
+#     levels(feed.mode)),piecol=cols,cex=0.3)
+# add.simmap.legend(colors=cols,prompt=FALSE,x=0.9*par()$usr[1],
+#     y=0.8*par()$usr[3],fsize=0.8)
+```
+\ Adding estimated probabilitys to each internal nodes in tree
+```{r}
+# plotTree(elop.tree,type="fan",fsize=0.7,ftype="i",lwd=1)
+#nodelabels(node=1:elop.tree$Nnode+Ntip(elop.tree),
+#    pie=fitER$lik.anc, piecol=cols, cex=0.4)
+#tiplabels(pie=to.matrix(feed.mode[elop.tree$tip.label],
+#levels(feed.mode)), piecol=cols,cex=0.3)
+#add.simmap.legend(colors=cols,prompt=FALSE,x=0.9*par()$usr[1],
+#    y=0.8*par()$usr[3],fsize=0.8)
+```
+\ Making state matrix to simmap
+```{r}
+library(limSolve)
+onehotencoder = function(data, index){
+    nlvls = nlevels(data[, index])
+    onehot = matrix(0, nrow = nrow(data), ncol = nlvls)
+    factors = as.numeric(data[, index])
+    for (i in 1:length(factors)){
+        if(is.na(factors[i]) == TRUE){
+            onehot[i, ] = rep(1/nlvls, nlvls)
+        }else{
+            onehot[i, factors[i]] = 1
+        }
+    }
+    row.names(onehot) = row.names(data)
+    colnames(onehot) = levels(data[, index])
+    return(onehot)
+}
+feed.mode = onehotencoder(X, 1)
+fit_discrete = make.simmap(elop.tree, feed.mode, model = "ARD", pi = "estimated")
+xranges(G = t(as.matrix(fit_discrete$Q)), F = rep(1, 2), E = matrix(1, ncol = nrow(fit_discrete$Q), nrow = nrow(fit_discrete$Q)),
+        H = c(0, 0))[, 1]
+```
+```{r}
+mtree
+```
+```{r}
+plot(mtree,cols,type="fan",fsize=0.8,ftype="i")
+add.simmap.legend(colors=cols,prompt=FALSE,x=0.9*par()$usr[1],
+    y=-max(nodeHeights(elop.tree)),fsize=0.8)
+```
+```{r}
+plot(mtrees[[1]],cols,type="fan",fsize=0.6,ftype="i")
+nodelabels(pie=pd$ace,piecol=cols,cex=0.4)
+add.simmap.legend(colors=cols,prompt=FALSE,x=0.9*par()$usr[1],
+    y=-max(nodeHeights(elop.tree)),fsize=0.6)
+```
+
+
+\
+Testing the ace in fastAnc in continuous data
+```{r}
+X = read.csv("elopomorph.csv", row.names = 1)
+max.tl = setNames(X[, 2], rownames(X))
+
+
+del.ind = match(NA, max.tl)
+new_max.tl = max.tl[-del.ind]
+del.ind_1 = match(NA, new_max.tl)
+new_max.tl = new_max.tl[-del.ind]
+del.ind_2 = match(NA, new_max.tl)
+new_max.tl = new_max.tl[-del.ind_2]
+del.ind_3 = match(NA, new_max.tl)
+new_max.tl = new_max.tl[-del.ind_3]
+new_max.tl
+```
+```{r}
+fit = anc.ML(elop.tree, new_max.tl, model = "BM", tol = 1e-30)
+fit$missing.x
+fit$sig2
+```
+```{r}
+plot(elop.tree)
+```
+
+\ 
+All of this information above is related to a maximum likelihood estimation of the continuous character for each internal nodes of the given tree. We can plot a gradient tree as below:
+```{r}
+obj = contMap(elop.tree, max.tl, plot=FALSE)
+plot(obj,type="fan",legend=0.7*max(nodeHeights(elop.tree)),
+    fsize=c(0.5,0.9))
+```

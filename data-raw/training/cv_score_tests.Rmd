@@ -1,0 +1,547 @@
+---
+title: "Testing  continuous score in some data"
+author: "Luben"
+date: "20/10/2020"
+output: html_document
+---
+```{r global_options, message=FALSE, include=FALSE}
+```
+Importing needed packages
+```{r message = FALSE}
+library(ape)
+library(dendextend)
+library(cluster)
+library(tibble)
+library(magrittr)
+library(dplyr)
+library(phytools)
+library(limSolve)
+library(mltools)
+library(data.table)
+library(factoextra)
+source("C:/Users/lucru/Estatística_UFSCar/cv_cluster/modules/convert_to_parenthesis.R")
+library(tictoc)
+library(Rphylopars)
+library(mvMORPH)
+```
+Generating some data and testing the continuous score:
+```{r}
+set.seed(99)
+data.sim =  data.frame("x1" = rnorm(20, 2, 1),
+                       "x2" = runif(20, 3, 6),
+                       "x3" = rexp(20))
+# using hierarchical clustering
+sim.agnes = agnes(scale(data.sim))
+dend.agnes = to.dend(sim.agnes)
+test = convert_to_par(dend.agnes)
+sim.test= read.tree(text = test)
+
+# comparing fviz_dend
+fviz_dend(dend.agnes)
+```
+\
+With normal plot:
+```{r}
+plot(sim.test)
+```
+\
+No difference. So, we use the above dendrogram and each $X_i$ to make the predictions.Initially we have for $X_1$
+```{r}
+var_1 = data.sim$x1
+var_1[3] = NA
+species = row.names(data.sim)
+data1 = data.frame("species" = species)
+mat = matrix(rep(data.sim$x1, nrow(data.sim)), nrow = nrow(data.sim), ncol = nrow(data.sim))
+diag(mat) = rep(NA, nrow(data.sim))
+data2 =  as.data.frame(mat)
+new_data = cbind(data1, data2)
+row.names(data.var) = row.names(data.sim)
+names(var_1) = row.names(data.sim)
+var_1
+new_data
+```
+Removing NA index
+```{r}
+del.ind = match(NA, var_1)
+new.var_1 = var_1[-del.ind]
+new.var_1
+```
+And now, testing in anc.ML:
+```{r}
+fit = anc.ML(sim.test, new.var_1, model = "BM")
+fit$missing.x
+fit2 = phylopars(new_data, sim.test, phylo_correlated = FALSE, pheno_correlated = FALSE,
+                 REML = FALSE)
+estim = fit2$anc_recon
+estim = estim[as.character(sort(as.numeric(row.names(estim)))),]
+missing = diag(estim[1:nrow(data.sim), 1:nrow(data.sim)])
+missing
+```
+Designing test function:
+```{r}
+test_cont = function(data, column, pos, dend){
+  if(is.factor(data[, column]) == FALSE){
+    var = scale(data[, column])
+    var[pos] = NA
+    names(var) = row.names(data)
+    del.ind = match(NA, var)
+    new.var = var[-del.ind]
+    fit = anc.ML(dend, new.var, model = "BM")
+    return(fit$missing.x)
+  }else{
+    return(NULL)
+  }
+}
+```
+Testing for $X_2$:
+```{r}
+test_cont(data.sim, 2, 3, sim.test)
+```
+and for $X_3$:
+```{r}
+test_cont(data.sim, 3, 3, sim.test)
+```
+Now simulating with a bigger $n$ and testing other functions:
+```{r}
+set.seed(99)
+n = 350
+new_data.sim =  data.frame("x1" = rnorm(n, 2, 1),
+                       "x2" = runif(n, 3, 6),
+                       "x3" = rexp(n))
+
+sim.agnes = agnes(scale(new_data.sim))
+dend.agnes = to.dend(sim.agnes)
+test = convert_to_par(dend.agnes)
+sim.test= read.tree(text = test)
+```
+\
+With normal plot:
+```{r}
+plot(sim.test)
+```
+\
+Testing *Phylopars* function:
+```{r}
+species = row.names(new_data.sim)
+data1 = data.frame("species" = species)
+mat = matrix(rep(data.sim$x1, nrow(new_data.sim)), nrow = nrow(new_data.sim), 
+             ncol = nrow(new_data.sim))
+diag(mat) = rep(NA, nrow(new_data.sim))
+data2 =  as.data.frame(mat)
+new_data = cbind(data1, data2)
+new_data[, c(1,2)]
+```
+```{r}
+tic("Phylopars time:")
+fit2 = phylopars(new_data, sim.test, phylo_correlated = FALSE, pheno_correlated = FALSE,
+                 REML = FALSE)
+estim = fit2$anc_recon
+estim = estim[as.character(sort(as.numeric(row.names(estim)))),]
+estim
+toc()
+```
+Testing *mvMORPH* fitting only one column:
+```{r}
+# fitting a phylogenetic model
+tic("Running time of fitting")
+temp = new_data.sim[, 1]
+temp = as.data.frame(temp)
+temp[1, ] = NA
+colnames(temp) = colnames(new_data.sim)[1]
+rownames(temp) = rownames(new_data.sim)
+fit = mvBM(sim.test, temp, model = "BM1", method = "inverse")
+toc()
+```
+Then estimating some missing states:
+```{r}
+mat = as.matrix(new_data.sim[, 1])
+mat[1,1] = rep(NA, 1)
+colnames(mat) = colnames(new_data.sim)[1]
+head(mat)
+```
+```{r}
+tic("Running time of a single imputation")
+imp = estim(sim.test, mat, fit)
+imp$estimates[imp$NA_index, 1]
+imp$var[]
+```
+Making vector of estimatives and variances
+```{r}
+estims = numeric(nrow(new_data.sim))
+vars = numeric(nrow(new_data.sim))
+# assessing the running time of a loop using the above function
+tic("Time of a loop in function")
+for(i in (1:nrow(new_data.sim))){
+  mat = as.matrix(new_data.sim[, 1])
+  colnames(mat) = colnames(new_data.sim)[1]
+  mat[i, 1] = NA
+  imp = estim(sim.test, mat, fit)
+  estims[i] = imp$estimates[imp$NA_index, 1]
+  vars[i] = imp$var[imp$NA_index]
+}
+toc()
+head(estims)
+head(vars)
+```
+Now, testing the same but using more data:
+```{r}
+tic("Running time of fitting")
+fit = mvBM(sim.test, new_data.sim, model = "BMM")
+toc()
+```
+Estimating missing state for column one:
+```{r}
+estims = numeric(nrow(new_data.sim))
+vars = numeric(nrow(new_data.sim))
+# assessing the running time of a loop using the above function
+tic("Time of a loop in function")
+for(i in (1:nrow(new_data.sim))){
+  mat = as.matrix(new_data.sim)
+  colnames(mat) = colnames(new_data.sim)
+  mat[i, 1] = NA
+  imp = estim(sim.test, mat, fit)
+  estims[i] = imp$estimates[imp$NA_index, 1]
+  vars[i] = imp$var[imp$NA_index]
+}
+toc()
+head(estims)
+head(vars)
+```
+It seems that doing just by one state is better than multivariate in matters of time. Now
+
+Assessing number of cores:
+```{r}
+cores = detectCores()
+cores
+```
+
+For $X_1$:
+```{r}
+test_cont(new_data.sim, 1, 3, sim.test)
+```
+For $X_2$:
+```{r}
+test_cont(new_data.sim, 2, 3, sim.test)
+```
+For $X_3$:
+```{r}
+test_cont(new_data.sim, 3, 3, sim.test)
+```
+Simulating mixed data:
+```{r}
+n = 250
+set.seed(125)
+data.sim = data.frame("x1" = rnorm(n, 2, 1),
+                      "x2" = runif(n , 3, 6),
+                      "x3" = factor(sample(c(1,2,3), n, replace = TRUE)))
+head(data.sim)
+```
+Fitting to phylogenetic model
+```{r}
+d =  daisy(data.sim, metric = "gower")
+
+sim.hc = hclust(d)
+dend.hc = to.dend(sim.hc)
+test = convert_to_par(dend.hc)
+sim.tree = read.tree(text = test)
+
+
+tic("Running time of fitting")
+fit = mvBM(sim.tree, data.sim, model = "BMM")
+toc()
+```
+
+```{r}
+mat = data.sim
+mat[1,3] = NA
+head(mat)
+```
+```{r}
+tic("Running time of a single imputation")
+imp = estim(sim.tree, mat, fit)
+imp$estimates[1, 3]
+```
+It seems to work, lets test our scoring function parallelized with anc.ML, serialized and parallelized with mvMORPH:
+```{r}
+
+set.seed(99)
+n = 100
+data.sim =  data.frame("x1" = rnorm(n, 2, 1),
+                       "x2" = runif(n, 3, 6),
+                       "x3" = rexp(n))
+
+# using agnes clustering
+sim.agnes = agnes(scale(data.sim))
+dend.agnes = to.dend(sim.agnes)
+test = convert_to_par(dend.agnes)
+sim.test= read.tree(text = test)
+
+tic("Scoring time for simulated data 3")
+final_score3 = L_score_3(sim.test, data.sim)
+final_score3
+toc()
+
+
+tic("Scoring time for simulated data 1")
+final_score = L_score(sim.test, data.sim)
+final_score
+toc()
+
+
+tic("Scoring time for simulated data 2")
+final_score2 = L_score_2(sim.test,data.sim)
+final_score2
+toc()
+
+```
+So, for agnes dendrogram we have a score of $3.33658$. Trying other hierarchical methods gives:
+```{r}
+sim.diana = diana(scale(new_data.sim))
+sim.hc = hclust(dist(scale(new_data.sim)), method = "ward.D2")
+
+dend.diana = to.dend(sim.diana)
+test.diana = convert_to_par(dend.diana)
+tree.diana = read.tree(text = test.diana)
+
+dend.hc = to.dend(sim.hc)
+test.hc = convert_to_par(dend.hc)
+tree.hc = read.tree(text = test.hc)
+
+# testing both
+tic("Scoring time for diana clustering in simulated data")
+final_score.diana = L_score(tree.diana, new_data.sim)
+toc()
+tic("Scoring time for hierarchical clustering in simulated data")
+final_score.hc = L_score(tree.hc, new_data.sim)
+toc()
+final_score
+final_score.hc
+final_score.diana
+```
+Now, returning to our original data, lets explore more of USArrests:
+```{r}
+arr = USArrests
+head(arr)
+```
+Testing hierarchical clustering with ward distance
+```{r}
+row.names(arr) = c(1:nrow(arr))
+arr.hc = hclust(dist(scale(arr)))
+dend.hc = to.dend(arr.hc)
+test = convert_to_par(dend.hc)
+arr.tree.hc = read.tree(text = test)
+
+# comparing fviz_dend
+fviz_dend(arr.hc)
+```
+\ Ploting the tree by default function to check the transformation:
+```{r}
+plot(arr.tree.hc)
+```
+\
+It seems to be right, lets give the anc.ML a try:
+```{r}
+test_cont(arr, 1, 3, arr.tree.hc)
+```
+Testing the score function now:
+```{r}
+tic("Scoring time for diana clustering in USArrests")
+L_score(arr.tree.hc, arr)
+toc()
+```
+Simulating large categorical dataset and then making a distance matrix with gower distance
+```{r}
+set.seed(7*14)
+n = 85
+sim.data = data.frame("X1" = factor(sample(c(1,2,3), n, replace = TRUE)),
+                      "X2" = factor(sample(c(1,2,3,4), n, replace = TRUE)),
+                      "X3" = factor(sample(c(0, 1), n, replace =  TRUE, prob = c(0.7, 0.3))),
+                      "X4" = factor(sample(c(0, 1, 2), n, replace = TRUE, prob = c(0.65, 0.05, 0.3)))
+)
+head(sim.data)
+```
+Making gowe matrix and fitting
+```{r}
+d =  daisy(sim.data, metric = "gower")
+```
+```{r}
+sim.hc = hclust(d)
+dend.hc = to.dend(sim.hc)
+test = convert_to_par(dend.hc)
+sim.tree = read.tree(text = test)
+fviz_dend(sim.hc)
+```
+```{r}
+plot(sim.tree)
+```
+\
+Checking effects of chunk separation and different NA positions for pi:
+```{r}
+test = sim.data$X1
+test2 = sim.data$X1
+names(test) = row.names(sim.data)
+names(test2) = row.names(sim.data)
+test[4] = NA
+test2[3] = NA
+onehot1 = onehotencoder(test)
+onehot2 = onehotencoder(test2)
+
+
+fit_discrete = make.simmap(as.multiPhylo(sim.tree), onehot1, model = "ER",
+                             message = FALSE, pi = "estimated")
+
+fit_discrete2 = make.simmap(as.multiPhylo(sim.tree), onehot2, model = "ER",
+                             message = FALSE, pi = "estimated")
+
+results = describe.simmap(fit_discrete, plot = F)
+results2  = describe.simmap(fit_discrete2, plot = F)
+
+results$tips[row.names(results$tips) ==  "4"]
+results2$tips[row.names(results$tips) ==  "3"]
+```
+```{r}
+Q = as.matrix(fit_discrete$Q)
+dim = nrow(Q)
+pi = xranges(E = matrix(1, nrow = dim, ncol = dim), F = rep(1, dim),
+          G = t(Q), H = rep(0, dim))[, 1]
+  
+  
+Q2 = as.matrix(fit_discrete2$Q)
+  dim = nrow(Q2)
+pi2 = xranges(E = matrix(1, nrow = dim, ncol = dim), F = rep(1, dim),
+          G = t(Q2), H = rep(0, dim))[, 1]
+
+pi
+pi2
+```
+
+```{r}
+set.seed(190)
+test = sim.data$X4
+test2 = sim.data$X4
+names(test) = row.names(sim.data)
+names(test2) = row.names(sim.data)
+pos = sample(1:nrow(sim.data), 2)
+test[pos[1]] = rep(NA, 1)
+test2[pos[2]] = rep(NA, 1)
+onehot1 = onehotencoder(test)
+onehot2 = onehotencoder(test2)
+fit_discrete = make.simmap(as.multiPhylo(sim.tree), onehot1, model = "ER", message = FALSE)
+
+fit_discrete2 = make.simmap(as.multiPhylo(sim.tree), onehot2, model = "ER",
+                             message = FALSE)
+
+results = describe.simmap(fit_discrete, plot = F)
+results2  = describe.simmap(fit_discrete2, plot = F)
+
+results$tips[row.names(results$tips) ==  pos[1]]
+results2$tips[row.names(results$tips) ==  pos[2]]
+```
+Doing it with mixed data:
+```{r}
+set.seed(99)
+n = 85
+sim.data = data.frame(
+  "X1" = rnorm(n, 2, 1),
+  "X2" = runif(n , 3, 6),
+  "X3" = factor(sample(c(0, 1), n, replace =  TRUE, prob = c(0.7, 0.3))),
+  "X4" = factor(sample(c(0, 1, 2), n, replace = TRUE, prob = c(0.65, 0.05, 0.3))))
+head(sim.data)
+```
+```{r}
+d =  daisy(sim.data, metric = "gower")
+```
+```{r}
+sim.hc = hclust(d)
+dend.hc = to.dend(sim.hc)
+test = convert_to_par(dend.hc)
+sim.tree = read.tree(text = test)
+fviz_dend(sim.hc)
+```
+```{r}
+set.seed(190)
+test = sim.data$X4
+test2 = sim.data$X4
+names(test) = row.names(sim.data)
+names(test2) = row.names(sim.data)
+test[sample(1:nrow(sim.data),10)] = rep(NA, 10)
+test2[sample(1:nrow(sim.data), 10)] = rep(NA, 10)
+priori = as.data.frame(table(test))[, 2]
+priori_2 = as.data.frame(table(test2))[, 2]
+priori = priori/(sum(priori))
+priori_2 = priori_2/(sum(priori_2))
+
+onehot1 = onehotencoder(test)
+onehot2 = onehotencoder(test2)
+fit_discrete = make.simmap(sim.tree, onehot1, model = "ER", pi  = priori,
+                           message = F)
+
+
+fit_discrete2 = make.simmap(sim.tree, onehot2, model = "ER", pi = priori_2,
+                            message = F)
+
+
+Q = as.matrix(fit_discrete$Q)
+dim = nrow(Q)
+pi = xranges(E = matrix(1, nrow = dim, ncol = dim), F = rep(1, dim),
+          G = t(Q), H = rep(0, dim))[, 1]
+  
+  
+Q2 = as.matrix(fit_discrete2$Q)
+  dim = nrow(Q2)
+pi_2 = xranges(E = matrix(1, nrow = dim, ncol = dim), F = rep(1, dim),
+          G = t(Q2), H = rep(0, dim))[, 1]
+
+pi
+pi_2
+```
+Testing score function now
+```{r}
+tic("Scoring time for hierarchical clustering with gower distance")
+L_score_2(sim.tree, sim.data)
+toc()
+```
+Testing Iris dataset:
+```{r}
+flowers = iris
+head(flowers)
+```
+```{r}
+row.names(flowers) = c(1:nrow(flowers))
+
+flowers.onehot = one_hot(as.data.table(flowers))
+head(flowers.onehot)
+flowers.onehot = flowers.onehot %>%
+  dplyr::select(-c("Species_virginica")) %>%
+  scale()
+flowers.hc= dist(flowers.onehot) %>%
+  hclust()
+dend.hc = to.dend(flowers.hc)
+test = convert_to_par(dend.hc)
+flowers.tree.hc = read.tree(text = test)
+flowers.tree.hc$edge.length[which(flowers.tree.hc$edge.length %in% c(0))] = 10^(-8)
+
+# comparing fviz_dend
+fviz_dend(flowers.hc)
+```
+\
+Ploting the tree by default function to check the transformation:
+```{r}
+plot(flowers.tree.hc)
+```
+\
+Testing continuous function:
+```{r}
+test_cont(flowers, 1, 3, flowers.tree.hc)
+```
+Testing the score function now:
+```{r message = FALSE}
+tic("Scoring time for hiearchical clustering in iris dataset")
+score = L_score(flowers.tree.hc, flowers)
+toc()
+```
+
+
+
+
+
