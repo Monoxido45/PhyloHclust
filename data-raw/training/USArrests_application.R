@@ -40,7 +40,7 @@ scores_arr %>% arrange(V1) %>% head(8)
 
 arr_dend = hclust(dist(scale(USArrests), method = "manhattan"), method = "mcquitty")
 
-# selecting the best 
+# selecting the best
 mcquitty.tree = convert_to_phylo(arr_dend)
 
 # dendrogram for murder
@@ -99,9 +99,9 @@ p1 = ggplot_data %>%
   theme_minimal() +
   labs(x = "Variables names",
        y = "Cross validated score values",
-       title = "Scatterplot of cross validated score values versus 
+       title = "Scatterplot of cross validated score values versus
        variables from USArrests dataset") +
-  theme(text = element_text(size = 11, 
+  theme(text = element_text(size = 11,
                             family ="serif"),
         plot.title = element_text(hjust = 0.5)) +
   ylim(0, max(ggplot_data$value) + 0.05)
@@ -133,7 +133,7 @@ p1 = ggplot_data %>%
   labs(x = "Variables names",
        y = "Importance value",
        title = "Scatterplot of variable importance for USArrests dataset") +
-  theme(text = element_text(size = 11, 
+  theme(text = element_text(size = 11,
                             family ="serif"),
         plot.title = element_text(hjust = 0.5)) +
   ylim(0, max(ggplot_data$value) + 0.05)
@@ -164,7 +164,7 @@ p1 = ggplot_data %>%
 labs(x = "Variables names",
        y = "Cross validated score values",
        title = "Wheat seeds dataset") +
-  theme(text = element_text(size = 11, 
+  theme(text = element_text(size = 11,
                             family ="serif"),
         plot.title = element_text(hjust = 0.5)) +
   ylim(0, max(ggplot_data$value) + 0.05)
@@ -173,12 +173,12 @@ p1
 
 # variable alternative importance for simulated dataset and wheat seeds
 # new test.list with more methods
-test.list = list(hclust = c("ward.D", "single","ward.D2", "average", "complete", "mcquitty", "median"), 
+test.list = list(hclust = c("ward.D", "single","ward.D2", "average", "complete", "mcquitty", "median"),
                  agnes = c("weighted", "average", "ward"), diana = NA)
 
 # wheat seeds dataset
 wheat.l_cross_per_var = L_cross_val_per_var_alt(wheat_data[, -8], test.list, dists, scale = T)
-  
+
 
 # simulated dataset
 # simulating in a different way
@@ -225,7 +225,7 @@ p1 = ggplot_data %>%
        y = "Importance score values",
        colour = "Combinations",
        title = "Wheat seeds dataset") +
-  theme(text = element_text(size = 11, 
+  theme(text = element_text(size = 11,
                             family ="serif"),
        plot.title = element_text(hjust = 0.5))
 p1
@@ -249,10 +249,10 @@ p2 = ggplot_data %>%
        y = "Importance score values",
        colour = "Combinations",
        title = "Simulated dataset") +
-  theme(text = element_text(size = 11, 
+  theme(text = element_text(size = 11,
                             family ="serif"),
         plot.title = element_text(hjust = 0.5))
-p2 + 
+p2 +
   ggsave(filename  = "simulated_dataset_importances.pdf",
          path = "C:/Users/lucru/Estat?stica_UFSCar/cv_cluster/figures",
          width = 20.75, height = 14.5, units = "cm")
@@ -287,18 +287,18 @@ ggplot_data %>%
        y = "Variables",
        fill = "Cluster",
        title = "Separation for wheat seeds") +
-  theme(text = element_text(size = 11, 
+  theme(text = element_text(size = 11,
                             family ="serif"),
         plot.title = element_text(hjust = 0.5))+
   scale_fill_brewer(palette = "Set1") +
   ggsave(filename = "boxplots_vars_clust_wheat_seeds.pdf",
-         path = "C:/Users/lucru/Estat?stica_UFSCar/cv_cluster/figures", 
+         path = "C:/Users/lucru/Estat?stica_UFSCar/cv_cluster/figures",
          width = 20.75, height = 12.5, units = "cm")
 
 
 # making dendrograms for V1, V2, V3 and V6
 
-# selecting the best 
+# selecting the best
 ward.tree = convert_to_phylo(wheat_dend)
 
 # dendrogram for V1
@@ -434,8 +434,8 @@ ceramic_data %<>%
   mutate(Part = as.factor(Part))
 
 # test list with only euclidean
-test.list = list(hclust = c("single","ward.D2", "ward.D", "complete", "mcquitty", 
-                            "average"), 
+test.list = list(hclust = c("single","ward.D2", "ward.D", "complete", "mcquitty",
+                            "average"),
                  diana = NA)
 dists = c("euclidean")
 tol = 1e-20
@@ -446,7 +446,7 @@ test.list = list(hclust = c("mcquitty"))
 dists = c("euclidean")
 
 # computing scores:
-ceramic.l_cross_per_var = L_cross_val_per_var_alt(ceramic_data[, -1], test.list, 
+ceramic.l_cross_per_var = L_cross_val_per_var_alt(ceramic_data[, -1], test.list,
                                                 dists, scale = T)
 
 ggplot_data = reshape2::melt(ceramic.l_cross_per_var)
@@ -459,18 +459,18 @@ p1 = ggplot_data %>%
   theme_minimal() +
   labs(x = "Features",
        y = "Phylogenetic Feature Importance Score (PFIS)") +
-  theme(text = element_text(size = 14, 
+  theme(text = element_text(size = 14,
                             family ="serif"),
         plot.title = element_text(hjust = 0.5)) +
   ylim(min(ggplot_data$value) - 0.05, max(ggplot_data$value) + 0.05)
 
 ggsave(p1, filename = "importances_ceramic_samples_data.pdf",
-         path = "/home/kuben/estatistica_UFSCAR/cv_cluster/figures", 
+         path = "/home/kuben/estatistica_UFSCAR/cv_cluster/figures",
          width = 20.75, height = 10.5, units = "cm")
 
 # plotting the best and worst variables according to importance
 # ward.D2 linkage
-ceramic_mcquitty_dend = hclust(dist(scale(ceramic_data[, -1]), 
+ceramic_mcquitty_dend = hclust(dist(scale(ceramic_data[, -1]),
                             method = "euclidean"), method = "mcquitty")
 
 # converting to tree
@@ -541,7 +541,7 @@ d = daisy(flowers, metric = "gower")
 complete.hc = hclust(d, method = "complete")
 complete.tree = convert_to_phylo(complete.hc)
 complete.tree$edge.length[which(complete.tree$edge.length %in% c(0))] = 10^(-3)
-x = setNames(flowers$Species, row.names(flowers))
+x = setNames(flowers$Species, gsub(" ", "", rownames(flowers)))
 fitER<-ace(x, complete.tree, model="ER", type="discrete")
 cols<-setNames(c("red","blue", "green"),levels(x))
 

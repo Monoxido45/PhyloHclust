@@ -19,7 +19,8 @@ Imports:
     mvMORPH,
     parallel,
     phytools,
-    stats
+    stats,
+    viridis
 Suggests: 
     reshape2,
     ggplot2,
