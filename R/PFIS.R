@@ -1,10 +1,26 @@
 #' @title Phylogenetical Feature Importance Score for Hierarchical clustering methods
+#' @description
+#' Phylogenetical Feature Importance Score of each feature with respect to each hierarchical clustering method
+#' and distance combination.
+#' @param data Data frame used to build hierarchical clustering
+#' @param cl.list Named list of hierarchical clustering methods: each entry is composed by the name of the hierarchical
+#' clustering algorithm (e.g. hclust) followed by a character vector of all it's underlying agglomeration methods selected
+#' for comparison (e.g. "complete", "ward.D2", ...).
+#' @param dists Chosen distance (or list of distances) to compute dissimilarity matrix for each hierarchical clustering method.
+#' Default is "euclidean".
+#' @param mixed_dist Chosen mixed distance (or list of mixed distances) to compute dissimilarity matrix for each hierarchical
+#' clustering method. Mixed distances are preferable to use when there are categorical features present in the dataset.
+#' Default is "gower".
+#' @param seed Fixed random seed for SIMMAP algorithm. Default is 99.
+#' @param plot Set whether the feature importance of each feature should be plotted. Default is TRUE.
+#' @return If plot is set to FALSE, a feature importance data frame is returned, with hierarchical clustering method and distance
+#' combinations placed in rows and features and types of distances in columns. If plot is set to TRUE, a list with the feature
+#' importance data frame and the plot object is returned instead.
 #' @export
 PFIS <- function(data,
                  cl.list,
                  dists = "euclidean",
                  mixed_dist = "gower",
-                 tol = 1e-20,
                  seed = 99,
                  ncores = 2,
                  plot = TRUE){
@@ -16,13 +32,13 @@ PFIS <- function(data,
   types <- sapply(data, class)
   bool <- (types == "integer" | types == "numeric")
   row.names(data) <- 1:nrow(data)
-  no_dists <- T
+  no_dists <- TRUE
 
   if(length(bool[bool != T]) == 0){
-    if(length(dists) > 1) no_dists <- F
+    if(length(dists) > 1) no_dists <- FALSE
     used.dists <- dists
   }else{
-    if(length(mixed_dist) > 1) no_dists <- F
+    if(length(mixed_dist) > 1) no_dists <- FALSE
     used.dists <- mixed_dist
   }
 
@@ -122,51 +138,67 @@ PFIS <- function(data,
 }
 
 #' @title Plot PFIS for each feature of the data
+#' @description
+#' Phylogenetical Feature Importance Score plot of each feature with respect to each hierarchical clustering method
+#' and distance combination.
+#' @param importance_data Feature importance data frame returned by PFIS function. Rows must be each of the hierarchical clustering
+#' methods and distance combination and columns the features from the dataset of interest.
+#' @param no_dists Set whether only one distance is used to compute dissimilarity matrix (TRUE) or not (FALSE). Default is TRUE.
+#' @return plot object with PFIS plot
 #' @export
 PFIS_plot <- function(importance_data, no_dists){
   if(no_dists == TRUE){
-    p1 <- importance_data %>%
-      reshape2::melt() %>%
-      dplyr::mutate(variable =
-                      as.factor(
-                        colnames(importance_data))) %>%
-      dplyr::mutate(variable =
-                      forcats::fct_reorder(variable,
-                                           value,
-                                           .fun = 'median',
-                                           .desc = T)) %>%
-      ggplot2::ggplot(ggplot2::aes(x = variable, y = value, group = 1)) +
-      ggplot2::geom_line() +
-      ggplot2::geom_point() +
-      ggplot2::theme_minimal() +
-      ggplot2::labs(x = "Features",
-                    y = "PFIS")
+    if(nrow(importance_data) > 1){
+      p1 <- importance_data %>%
+        tibble::rownames_to_column(var = "methods") %>%
+        tidyr::pivot_longer(!methods, names_to = "variable", values_to = "value") %>%
+        dplyr::mutate(variable =
+                        as.factor(variable)) %>%
+        ggplot2::ggplot(ggplot2::aes(x = variable, y = value, group = methods)) +
+        ggplot2::geom_line(ggplot2::aes(colour = methods)) +
+        ggplot2::geom_point(ggplot2::aes(colour = methods)) +
+        ggplot2::theme_minimal() +
+        ggplot2::labs(x = "Features",
+                      y = "PFIS")
+    }else{
+      p1 <- importance_data %>%
+        tidyr::pivot_longer(names_to = "variable", values_to = "value") %>%
+        dplyr::mutate(variable =
+                        as.factor(variable)) %>%
+        dplyr::mutate(variable =
+                        forcats::fct_reorder(variable,
+                                             value,
+                                             .fun = 'median',
+                                             .desc = T)) %>%
+        ggplot2::ggplot(ggplot2::aes(x = variable, y = value, group = 1)) +
+        ggplot2::geom_line() +
+        ggplot2::geom_point() +
+        ggplot2::theme_minimal() +
+        ggplot2::labs(x = "Features",
+                      y = "PFIS")
+    }
     return(p1)
   }
   p <- ncol(importance_data)
   n <- nrow(importance_data)
-  dists <- importance_data %>%
-    dplyr::pull(p)
+
   p1 <- importance_data %>%
-    select(-p) %>%
-    reshape2::melt() %>%
-    dplyr::mutate(dist = rep(as.factor(dists), p - 1),
-                  obs = rep(as.factor(1:n), p -1),
+    dplyr::rename(distances = names(.)[p]) %>%
+    tibble::rownames_to_column(var = "methods") %>%
+    dplyr::mutate(methods = sub("^(.*)[.].*", "\\1", methods)) %>%
+    tidyr::pivot_longer(cols = 2:p, names_to = "variable", values_to = "value") %>%
+    dplyr::mutate(distances = as.factor(paste0("distance = ", distances)),
                   variable = as.factor(variable)) %>%
-    dplyr::mutate(variable = forcats::fct_reorder(variable,
-                                                  value,
-                                                  .fun = 'median',
-                                                  .desc = T)) %>%
     ggplot2::ggplot(ggplot2::aes(
       x = variable,
       y  = value,
-      group = obs)) +
-    ggplot2::geom_line(ggplot2::aes(color = dist)) +
-    ggplot2::geom_point(ggplot2::aes(color = dist)) +
+      group = methods)) +
+    ggplot2::geom_line(ggplot2::aes(color = methods)) +
+    ggplot2::geom_point(ggplot2::aes(color = methods)) +
     ggplot2::theme_minimal() +
+    ggplot2::facet_grid(rows = ggplot2::vars(distances))+
     ggplot2::labs(x = "Variables names",
                   y = "PFIS",
-                  colour = "Distances")
+                  colour = "Methods")
   return(p1)
-
 }

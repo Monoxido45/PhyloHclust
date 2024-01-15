@@ -23,6 +23,7 @@ Imports:
     stats,
     viridis
 Suggests: 
-    reshape2,
+    tibble,
+    tidyr,
     ggplot2,
     forcats

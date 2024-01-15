@@ -1,9 +1,18 @@
 # L_score main function
+#' @title Leave one feature out cross validation loss
+#' @description Leave one feature out cross validation loss for a given dendrogram and dataset. This is an auxiliary function to
+#' the main functions CVL and PFIS but can be used separately.
+#' @param dend Dendrogram of interest (an object of class "phylo")
+#' @param original_data Entire dataset (data.frame or matrix) or feature of interest (numeric or factor vector) to compute cross validate loss
+#' @param seed Fixed random seed for SIMMAP algorithm. Default is 99.
+#' @param ncores Number of cores to paralelize the computing process. Default is 2.
+#' @param score Set whether a vector of leave one feature out loss should be computed (TRUE) or compute the overall mean of the loss
+#' directly (FALSE)
+#' @return A numeric vector of leave one feature out losses.
 #' @importFrom foreach %dopar%
 #' @export
 L_score <- function(dend,
                    original_data,
-                   tol  = 1e-20,
                    seed = 99,
                    ncores = 2,
                    score = FALSE){
@@ -29,7 +38,6 @@ L_score <- function(dend,
                              lines = row_computing(types,
                                                    dend,
                                                    original_data,
-                                                   tol,
                                                    seed,
                                                    j)
                              lines

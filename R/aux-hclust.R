@@ -1,5 +1,6 @@
 # auxilizary functions
 # onehot encoder for categorical data
+#'@export
 onehotencoder <- function(miss_data){
   nlvls <- nlevels(miss_data)
   onehot <- matrix(0, nrow = length(miss_data), ncol = nlvls)
@@ -17,6 +18,7 @@ onehotencoder <- function(miss_data){
 }
 
 # computing pi for categorical loss
+#'@export
 factorial.missing <- function(dend,
                               miss_data,
                               row,
@@ -32,10 +34,10 @@ factorial.missing <- function(dend,
 }
 
 # computing distances for each type of feature
+#'@export
 row_computing <- function(types,
                           dend,
                           original_data,
-                          tol,
                           seed,
                           col){
 

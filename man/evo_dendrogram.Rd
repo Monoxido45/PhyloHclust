@@ -2,7 +2,7 @@
 % Please edit documentation in R/evo_dendrogram.R
 \name{evo_dendrogram}
 \alias{evo_dendrogram}
-\title{Plot evolution dendogram for given data and selected variables}
+\title{Plot evolutionary dendogram}
 \usage{
 evo_dendrogram(
   data,
@@ -12,13 +12,44 @@ evo_dendrogram(
   scale_data = TRUE,
   fsize = c(0.9, 0.8),
   outline = FALSE,
-  lwd = c(3, 7),
+  lwd = 1,
   leg_txt = NA,
   palette_discrete = "Set1",
   cex = c(0.4, 0.25),
   ...
 )
 }
+\arguments{
+\item{data}{Data frame object of interest.}
+
+\item{var_col}{Columns from the dataset to plot the evolutionary dendrogram.}
+
+\item{hclust_obj}{Hierarchical clustering object obtained by applying a hierarchical clustering method in the
+dataset of interest.}
+
+\item{tip_names}{Set whether to plot rownames in the evo dendrogram. Default is TRUE.}
+
+\item{scale_data}{Set whether to scale all continuous variable in the dataset when plotting.}
+
+\item{fsize}{Figure size of each evolutionary dednrogram relative to the default dimensions from base plot. Default
+is c(0.9, 0.8).}
+
+\item{outline}{Set whether to draw border around each evolutionary dendrogram plot. Default is FALSE.}
+
+\item{lwd}{Line width relative to the default. Default is 1.}
+
+\item{leg_txt}{Legend text to place in legend corner. Default is NA.}
+
+\item{palette_discrete}{Palette used to Ancestral State reconstruction of categorical variables. Default is "Set1".}
+
+\item{cex}{A numerical value giving the amount by which plotting text and symbols should be magnified relative to the
+default. Default is c(0.4, 0.25).}
+
+\item{...}{Additional base plot arguments to be passe to graphical parameters.}
+}
+\value{
+Evolutionary dendrogram plot
+}
 \description{
-Plot evolution dendogram for given data and selected variables
+Plot evolutionary dendrogram of a selected variable in a hierarchical clustering of a given dataset of interest.
 }

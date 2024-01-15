@@ -6,6 +6,16 @@
 \usage{
 PFIS_plot(importance_data, no_dists)
 }
+\arguments{
+\item{importance_data}{Feature importance data frame returned by PFIS function. Rows must be each of the hierarchical clustering
+methods and distance combination and columns the features from the dataset of interest.}
+
+\item{no_dists}{Set whether only one distance is used to compute dissimilarity matrix (TRUE) or not (FALSE). Default is TRUE.}
+}
+\value{
+plot object with PFIS plot
+}
 \description{
-Plot PFIS for each feature of the data
+Phylogenetical Feature Importance Score plot of each feature with respect to each hierarchical clustering method
+and distance combination.
 }

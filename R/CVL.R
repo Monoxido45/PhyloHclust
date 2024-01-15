@@ -1,12 +1,27 @@
 #' @title Cross validation Loss for hierarchical clustering methods
+#' @description
+#' Leave one feature out Cross validation loss for comparing a list of hierarchical clustering methods.
+#' @param data Data frame used to build hierarchical clustering
+#' @param cl.list Named list of hierarchical clustering methods: each entry is composed by the name of the hierarchical
+#' clustering algorithm (e.g. hclust) followed by a character vector of all it's underlying agglomeration methods selected
+#' for comparison (e.g. "complete", "ward.D2", ...).
+#' @param dists Chosen distance (or list of distances) to compute dissimilarity matrix for each hierarchical clustering method.
+#' Default is "euclidean".
+#' @param mixed_dist Chosen mixed distance (or list of mixed distances) to compute dissimilarity matrix for each hierarchical
+#' clustering method. Mixed distances are preferable to use when there are categorical features present in the dataset.
+#' Default is "gower".
+#' @param seed Fixed random seed for SIMMAP algorithm. Default is 99.
+#' @param ncores Number of cores to paralelize the computing process. Default is 2.
+#' @param median Whether to compute the median of the leave one feature out loss associated to every feature or the mean.
+#' @return A data frame comparing the CVL of each hierarchical clustering method and distance combination.
 #' @export
 CVL <- function(data,
                 cl.list,
                 dists = "euclidean",
                 mixed_dist = "gower",
-                tol = 1e-20,
                 seed = 99,
-                median = F){
+                ncores = 2,
+                median = FALSE){
 
   list.names <- names(cl.list)
   p <- ncol(data)
@@ -48,7 +63,7 @@ CVL <- function(data,
             }
             clust <- get(hc.func)(d, method = methods[c])
             tree <- convert_to_phylo(clust)
-            results[j] <- L_score(tree, test_data, ncores = 1)
+            results[j] <- L_score(tree, test_data, ncores = ncores)
           }
           if(median == F){
             all_results[[paste0(hc.func, ".", methods[c], ".", used.dists[1])]] <-
@@ -78,7 +93,7 @@ CVL <- function(data,
 
             clust <- get(hc.func)(d)
             tree <- convert_to_phylo(clust)
-            results[j] <- L_score(tree, test_data, ncores = 1)
+            results[j] <- L_score(tree, test_data, ncores = ncores)
           }
           if(median == F){
             all_results[[paste0(hc.func, ".", used.dists[1])]] <-
@@ -110,7 +125,7 @@ CVL <- function(data,
               }
               clust <- get(hc.func)(d, method = methods[c])
               tree <- convert_to_phylo(clust)
-              results[j] <- L_score(tree, test_data, ncores = 1)
+              results[j] <- L_score(tree, test_data, ncores = ncores)
             }
             if(median == F){
               all_results[[paste0(hc.func, ".", methods[c], ".", used.dists[h])]] <-
@@ -140,7 +155,7 @@ CVL <- function(data,
 
               clust <- get(hc.func)(d)
               tree <- convert_to_phylo(clust)
-              results[j] <- L_score(tree, test_data, ncores = 1)
+              results[j] <- L_score(tree, test_data, ncores = ncores)
             }
             if(median == F){
               all_results[[paste0(hc.func, ".", used.dists[h])]] <-

@@ -9,12 +9,35 @@ PFIS(
   cl.list,
   dists = "euclidean",
   mixed_dist = "gower",
-  tol = 1e-20,
   seed = 99,
   ncores = 2,
   plot = TRUE
 )
 }
+\arguments{
+\item{data}{Data frame used to build hierarchical clustering}
+
+\item{cl.list}{Named list of hierarchical clustering methods: each entry is composed by the name of the hierarchical
+clustering algorithm (e.g. hclust) followed by a character vector of all it's underlying agglomeration methods selected
+for comparison (e.g. "complete", "ward.D2", ...).}
+
+\item{dists}{Chosen distance (or list of distances) to compute dissimilarity matrix for each hierarchical clustering method.
+Default is "euclidean".}
+
+\item{mixed_dist}{Chosen mixed distance (or list of mixed distances) to compute dissimilarity matrix for each hierarchical
+clustering method. Mixed distances are preferable to use when there are categorical features present in the dataset.
+Default is "gower".}
+
+\item{seed}{Fixed random seed for SIMMAP algorithm. Default is 99.}
+
+\item{plot}{Set whether the feature importance of each feature should be plotted. Default is TRUE.}
+}
+\value{
+If plot is set to FALSE, a feature importance data frame is returned, with hierarchical clustering method and distance
+combinations placed in rows and features and types of distances in columns. If plot is set to TRUE, a list with the feature
+importance data frame and the plot object is returned instead.
+}
 \description{
-Phylogenetical Feature Importance Score for Hierarchical clustering methods
+Phylogenetical Feature Importance Score of each feature with respect to each hierarchical clustering method
+and distance combination.
 }
