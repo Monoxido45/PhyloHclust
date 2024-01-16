@@ -19,7 +19,7 @@ PFIS(
 
 \item{cl.list}{Named list of hierarchical clustering methods: each entry is composed by the name of the hierarchical
 clustering algorithm (e.g. hclust) followed by a character vector of all it's underlying agglomeration methods selected
-for comparison (e.g. "complete", "ward.D2", ...).}
+for comparison (e.g. "complete", "ward.D2").}
 
 \item{dists}{Chosen distance (or list of distances) to compute dissimilarity matrix for each hierarchical clustering method.
 Default is "euclidean".}
@@ -30,7 +30,8 @@ Default is "gower".}
 
 \item{seed}{Fixed random seed for SIMMAP algorithm. Default is 99.}
 
-\item{plot}{Set whether the feature importance of each feature should be plotted. Default is TRUE.}
+\item{plot}{Set whether the feature importance of each feature for all selected hierarchical clustering methods and distances
+should be plotted. Default is TRUE.}
 }
 \value{
 If plot is set to FALSE, a feature importance data frame is returned, with hierarchical clustering method and distance

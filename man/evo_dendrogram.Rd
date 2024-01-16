@@ -27,7 +27,7 @@ evo_dendrogram(
 \item{hclust_obj}{Hierarchical clustering object obtained by applying a hierarchical clustering method in the
 dataset of interest.}
 
-\item{tip_names}{Set whether to plot rownames in the evo dendrogram. Default is TRUE.}
+\item{tip_names}{Set whether to plot rownames in the evolutionary dendrogram. Default is TRUE.}
 
 \item{scale_data}{Set whether to scale all continuous variable in the dataset when plotting.}
 

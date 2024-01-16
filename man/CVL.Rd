@@ -19,7 +19,7 @@ CVL(
 
 \item{cl.list}{Named list of hierarchical clustering methods: each entry is composed by the name of the hierarchical
 clustering algorithm (e.g. hclust) followed by a character vector of all it's underlying agglomeration methods selected
-for comparison (e.g. "complete", "ward.D2", ...).}
+for comparison (e.g. "complete", "ward.D2").}
 
 \item{dists}{Chosen distance (or list of distances) to compute dissimilarity matrix for each hierarchical clustering method.
 Default is "euclidean".}
@@ -30,12 +30,13 @@ Default is "gower".}
 
 \item{seed}{Fixed random seed for SIMMAP algorithm. Default is 99.}
 
-\item{ncores}{Number of cores to paralelize the computing process. Default is 2.}
+\item{ncores}{Number of cores to parallelize the computing process. Default is 2.}
 
-\item{median}{Whether to compute the median of the leave one feature out loss associated to every feature or the mean.}
+\item{median}{Set whether to compute the median of the leave one feature out loss associated to every feature (TRUE) or the
+mean (FALSE). Default is FALSE.}
 }
 \value{
-A data frame comparing the CVL of each hierarchical clustering method and distance combination.
+A data frame comparing the CVL of each hierarchical clustering method and distance combinations.
 }
 \description{
 Leave one feature out Cross validation loss for comparing a list of hierarchical clustering methods.

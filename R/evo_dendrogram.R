@@ -5,7 +5,7 @@
 #' @param var_col Columns from the dataset to plot the evolutionary dendrogram.
 #' @param hclust_obj Hierarchical clustering object obtained by applying a hierarchical clustering method in the
 #' dataset of interest.
-#' @param tip_names Set whether to plot rownames in the evo dendrogram. Default is TRUE.
+#' @param tip_names Set whether to plot rownames in the evolutionary dendrogram. Default is TRUE.
 #' @param scale_data Set whether to scale all continuous variable in the dataset when plotting.
 #' @param fsize Figure size of each evolutionary dednrogram relative to the default dimensions from base plot. Default
 #' is c(0.9, 0.8).
