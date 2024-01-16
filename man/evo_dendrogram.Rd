@@ -27,11 +27,11 @@ evo_dendrogram(
 \item{hclust_obj}{Hierarchical clustering object obtained by applying a hierarchical clustering method in the
 dataset of interest.}
 
-\item{tip_names}{Set whether to plot rownames in the evolutionary dendrogram. Default is TRUE.}
+\item{tip_names}{Set whether to plot row names in the evolutionary dendrogram. Default is TRUE.}
 
 \item{scale_data}{Set whether to scale all continuous variable in the dataset when plotting.}
 
-\item{fsize}{Figure size of each evolutionary dednrogram relative to the default dimensions from base plot. Default
+\item{fsize}{Figure size of each evolutionary dendrogram relative to the default dimensions from base plot. Default
 is c(0.9, 0.8).}
 
 \item{outline}{Set whether to draw border around each evolutionary dendrogram plot. Default is FALSE.}
@@ -45,10 +45,10 @@ is c(0.9, 0.8).}
 \item{cex}{A numerical value giving the amount by which plotting text and symbols should be magnified relative to the
 default. Default is c(0.4, 0.25).}
 
-\item{...}{Additional base plot arguments to be passe to graphical parameters.}
+\item{...}{Additional R base plot arguments to be passed to graphical parameters.}
 }
 \value{
-Evolutionary dendrogram plot
+Evolutionary dendrogram plot.
 }
 \description{
 Plot evolutionary dendrogram of a selected variable in a hierarchical clustering of a given dataset of interest.

@@ -5,9 +5,9 @@
 #' @param var_col Columns from the dataset to plot the evolutionary dendrogram.
 #' @param hclust_obj Hierarchical clustering object obtained by applying a hierarchical clustering method in the
 #' dataset of interest.
-#' @param tip_names Set whether to plot rownames in the evolutionary dendrogram. Default is TRUE.
+#' @param tip_names Set whether to plot row names in the evolutionary dendrogram. Default is TRUE.
 #' @param scale_data Set whether to scale all continuous variable in the dataset when plotting.
-#' @param fsize Figure size of each evolutionary dednrogram relative to the default dimensions from base plot. Default
+#' @param fsize Figure size of each evolutionary dendrogram relative to the default dimensions from base plot. Default
 #' is c(0.9, 0.8).
 #' @param outline Set whether to draw border around each evolutionary dendrogram plot. Default is FALSE.
 #' @param lwd Line width relative to the default. Default is 1.
@@ -15,8 +15,8 @@
 #' @param palette_discrete Palette used to Ancestral State reconstruction of categorical variables. Default is "Set1".
 #' @param cex  A numerical value giving the amount by which plotting text and symbols should be magnified relative to the
 #' default. Default is c(0.4, 0.25).
-#' @param ... Additional base plot arguments to be passe to graphical parameters.
-#' @return Evolutionary dendrogram plot
+#' @param ... Additional R base plot arguments to be passed to graphical parameters.
+#' @return Evolutionary dendrogram plot.
 #' @export
 evo_dendrogram <- function(data,
                            var_col,
