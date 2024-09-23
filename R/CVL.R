@@ -22,34 +22,36 @@ CVL <- function(data,
                 mixed_dist = "gower",
                 seed = 99,
                 ncores = 2,
-                median = FALSE){
-
+                median = FALSE) {
   list.names <- names(cl.list)
   p <- ncol(data)
   l <- length(list.names)
   all_results <- list()
   types <- sapply(data, class)
+  # specifying numerical and categorical indexes
+  id_num <- which(types == "integer" | types == "numeric")
+  id_cat <- which(types == "character" | types == "factor")
   bool <- (types == "integer" | types == "numeric")
-  no_dists <- T
-  row.names(data) = 1:nrow(data)
+  no_dists <- TRUE
+  row.names(data) <- 1:nrow(data)
 
-  if(length(bool[bool != T]) == 0){
-    if(length(dists) > 1) no_dists <- F
+  if (length(bool[bool != TRUE]) == 0) {
+    if (length(dists) > 1) no_dists <- F
     used.dists <- dists
-  }else{
-    if(length(mixed_dist) > 1) no_dists <- F
+  } else {
+    if (length(mixed_dist) > 1) no_dists <- F
     used.dists <- mixed_dist
   }
 
-  for(k in (1:l)){
+  for (k in (1:l)) {
     hc.func <- list.names[k]
     methods <- cl.list[[hc.func]]
     m <- length(methods)
-    if(no_dists == T){
-      if(anyNA(methods) == F){
-        for(c in (1:m)){
+    if (no_dists == TRUE) {
+      if (anyNA(methods) == F) {
+        for (c in (1:m)) {
           results <- numeric(p)
-          for(j in 1:p){
+          for (j in 1:p) {
             test_data <- data %>%
               dplyr::select(j) %>%
               as.data.frame()
@@ -57,27 +59,113 @@ CVL <- function(data,
             training_data <- data %>%
               dplyr::select(-j) %>%
               as.data.frame()
-            if(length(bool[bool != T]) == 0){
+            if (length(bool[bool != TRUE]) == 0) {
               d <- stats::dist(scale(training_data), method = dists)
-            }else{
-              d <- kmed::distmix(training_data, method = mixed_dist)
+            } else {
+              d <- kmed::distmix(
+                training_data,
+                method = mixed_dist,
+                idnum = id_num,
+                idcat = id_cat
+              ) %>% stats::as.dist()
             }
             clust <- get(hc.func)(d, method = methods[c])
             tree <- convert_to_phylo(clust)
             results[j] <- L_score(tree, test_data, ncores = ncores)
           }
-          if(median == F){
+          if (median == F) {
             all_results[[paste0(hc.func, ".", methods[c], ".", used.dists[1])]] <-
-              c(mean(results, na.rm = T),
-                used.dists[1])
-          }else{
+              c(
+                mean(results, na.rm = TRUE),
+                used.dists[1]
+              )
+          } else {
             all_results[[paste0(hc.func, ".", methods[c], ".", used.dists[1])]] <-
-              c(median(results, na.rm = T),
-                used.dists[1])
+              c(
+                median(results, na.rm = TRUE),
+                used.dists[1]
+              )
           }
-        }}else{
+        }
+      } else {
+        results <- numeric(p)
+        for (j in 1:p) {
+          test_data <- data %>%
+            dplyr::select(j) %>%
+            as.data.frame()
+
+          training_data <- data %>%
+            dplyr::select(-j) %>%
+            as.data.frame()
+
+          if (length(bool[bool != TRUE]) == 0) {
+            d <- stats::dist(scale(training_data), method = dists)
+          } else {
+            d <- kmed::distmix(
+              training_data,
+              method = mixed_dist,
+              idnum = id_num,
+              idcat = id_cat
+            ) %>% stats::as.dist()
+          }
+
+          clust <- get(hc.func)(d)
+          tree <- convert_to_phylo(clust)
+          results[j] <- L_score(tree, test_data, ncores = ncores)
+        }
+        if (median == F) {
+          all_results[[paste0(hc.func, ".", used.dists[1])]] <-
+            c(mean(results, na.rm = TRUE), used.dists[1])
+        } else {
+          all_results[[paste0(hc.func, ".", used.dists[1])]] <-
+            c(median(results, na.rm = TRUE), used.dists[1])
+        }
+      }
+    } else {
+      dists.length <- length(used.dists)
+      for (h in 1:dists.length) {
+        if (anyNA(methods) == F) {
+          for (c in (1:m)) {
+            results <- numeric(p)
+            for (j in 1:p) {
+              test_data <- data %>%
+                dplyr::select(j) %>%
+                as.data.frame()
+
+              training_data <- data %>%
+                dplyr::select(-j) %>%
+                as.data.frame()
+              if (length(bool[bool != TRUE]) == 0) {
+                d <- stats::dist(scale(training_data), method = dists[h])
+              } else {
+                d <- kmed::distmix(
+                  training_data,
+                  method = mixed_dist[h],
+                  idnum = id_num,
+                  idcat = id_cat
+                ) %>% stats::as.dist()
+              }
+              clust <- get(hc.func)(d, method = methods[c])
+              tree <- convert_to_phylo(clust)
+              results[j] <- L_score(tree, test_data, ncores = ncores)
+            }
+            if (median == F) {
+              all_results[[paste0(hc.func, ".", methods[c], ".", used.dists[h])]] <-
+                c(
+                  mean(results, na.rm = TRUE),
+                  used.dists[h]
+                )
+            } else {
+              all_results[[paste0(hc.func, ".", methods[c], ".", used.dists[h])]] <-
+                c(
+                  median(results, na.rm = TRUE),
+                  used.dists[h]
+                )
+            }
+          }
+        } else {
           results <- numeric(p)
-          for(j in 1:p){
+          for (j in 1:p) {
             test_data <- data %>%
               dplyr::select(j) %>%
               as.data.frame()
@@ -86,96 +174,39 @@ CVL <- function(data,
               dplyr::select(-j) %>%
               as.data.frame()
 
-            if(length(bool[bool != T]) == 0){
-              d <- stats::dist(scale(training_data), method = dists)
-            }else{
-              d <- kmed::distmix(training_data, method = mixed_dist)
+            if (length(bool[bool != TRUE]) == 0) {
+              d <- stats::dist(scale(training_data), method = dists[h])
+            } else {
+              d <- kmed::distmix(
+                training_data,
+                method = mixed_dist[h],
+                idnum = id_num,
+                idcat = id_cat
+              ) %>% stats::as.dist()
             }
 
             clust <- get(hc.func)(d)
             tree <- convert_to_phylo(clust)
             results[j] <- L_score(tree, test_data, ncores = ncores)
           }
-          if(median == F){
-            all_results[[paste0(hc.func, ".", used.dists[1])]] <-
-              c(mean(results, na.rm = T), used.dists[1])
-          }else{
-            all_results[[paste0(hc.func, ".", used.dists[1])]] <-
-              c(median(results, na.rm = T), used.dists[1])
+          if (median == F) {
+            all_results[[paste0(hc.func, ".", used.dists[h])]] <-
+              c(mean(results, na.rm = TRUE), used.dists[h])
+          } else {
+            all_results[[paste0(hc.func, ".", used.dists[h])]] <-
+              c(median(results, na.rm = TRUE), used.dists[h])
           }
         }
-    }
-    else{
-      dists.length <- length(used.dists)
-      for(h in 1:dists.length){
-        if(anyNA(methods) == F){
-          for(c in (1:m)){
-            results <- numeric(p)
-            for(j in 1:p){
-              test_data <- data %>%
-                dplyr::select(j) %>%
-                as.data.frame()
-
-              training_data <- data %>%
-                dplyr::select(-j) %>%
-                as.data.frame()
-              if(length(bool[bool != T]) == 0){
-                d <- stats::dist(scale(training_data), method = dists[h])
-              }else{
-                d <- kmed::distmix(training_data, method = mixed_dist[h])
-              }
-              clust <- get(hc.func)(d, method = methods[c])
-              tree <- convert_to_phylo(clust)
-              results[j] <- L_score(tree, test_data, ncores = ncores)
-            }
-            if(median == F){
-              all_results[[paste0(hc.func, ".", methods[c], ".", used.dists[h])]] <-
-                c(mean(results, na.rm = T),
-                  used.dists[h])
-            }else{
-              all_results[[paste0(hc.func, ".", methods[c], ".", used.dists[h])]] <-
-                c(median(results, na.rm = T),
-                  used.dists[h])
-            }
-          }}else{
-            results <- numeric(p)
-            for(j in 1:p){
-              test_data <- data %>%
-                dplyr::select(j) %>%
-                as.data.frame()
-
-              training_data <- data %>%
-                dplyr::select(-j) %>%
-                as.data.frame()
-
-              if(length(bool[bool != T]) == 0){
-                d <- stats::dist(scale(training_data), method = dists[h])
-              }else{
-                d <- kmed::distmix(training_data, method = mixed_dist[h])
-              }
-
-              clust <- get(hc.func)(d)
-              tree <- convert_to_phylo(clust)
-              results[j] <- L_score(tree, test_data, ncores = ncores)
-            }
-            if(median == F){
-              all_results[[paste0(hc.func, ".", used.dists[h])]] <-
-                c(mean(results, na.rm = T), used.dists[h])
-            }else{
-              all_results[[paste0(hc.func, ".", used.dists[h])]] <-
-                c(median(results, na.rm = T), used.dists[h])
-            }
-          }
       }
     }
   }
-  if(no_dists == F){
+  if (no_dists == F) {
     all_cvs <- do.call(rbind, all_results)
     cvs_data.frame <- as.data.frame(all_cvs)
     cvs_data.frame$V1 <- as.numeric(cvs_data.frame$V1)
     colnames(cvs_data.frame) <- c("loss", "distance")
     return(cvs_data.frame)
-  }else{
+  } else {
     all_cvs <- do.call(rbind, all_results)
     cvs_data.frame <- as.data.frame(all_cvs)
     return(cvs_data.frame)

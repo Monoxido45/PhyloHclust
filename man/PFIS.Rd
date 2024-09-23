@@ -30,6 +30,8 @@ Default is "gower".}
 
 \item{seed}{Fixed random seed for SIMMAP algorithm. Default is 99.}
 
+\item{ncores}{Number of cores to parallelize the computing process. Default is 2.}
+
 \item{plot}{Set whether the feature importance of each feature for all selected hierarchical clustering methods and distances
 should be plotted. Default is TRUE.}
 }
